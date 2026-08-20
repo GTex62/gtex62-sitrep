@@ -1,0 +1,26 @@
+suite_id = "sitrep"
+name = "gtex62-sitrep"
+version = "0.1.0"
+core_requirement = ">=1.0,<2.0"
+
+[repo]
+layout = "core-native"
+
+[entrypoints]
+theme_dir = "theme"
+lua_dir = "lua"
+widgets_dir = "widgets"
+scripts_dir = "scripts"
+
+[assets]
+design_dir = "design"
+docs_dir = "docs"
+shared_assets_dir = "../gtex62-shared-assets"
+fonts_dir = "../gtex62-shared-assets/fonts"
+icons_dir = "../gtex62-shared-assets/icons"
+wallpapers_dir = "../gtex62-shared-assets/wallpapers"
+
+[theme]
+default_palette = "phosphor"
+palette_catalog = "theme/palettes.lua"
+palette_format = "role3"

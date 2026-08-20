@@ -1,0 +1,54 @@
+# Local environment and secrets
+.env
+.env.*
+*.local
+*.secret
+*secret*
+*token*
+*key*
+
+# Runtime and generated data
+/cache/
+/data/
+/runtime/
+/tmp/
+/logs/
+/bak/
+*.log
+*.pid
+*.lock
+*.stamp
+*.tmp
+*.bak
+*.bak2
+
+# Generated cache/provider output
+*.json.tmp
+current.json
+forecast.json
+normalized.json
+extended.json
+status.json
+snapshot.json
+events_cache.txt
+seasonal.vars
+owm_forecast.json
+
+# Design assets
+/design/
+
+# Local tool/editor state
+.codex
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+**/.comments/
+
+# Lua/Python bytecode
+*.luac
+__pycache__/
+*.py[cod]
