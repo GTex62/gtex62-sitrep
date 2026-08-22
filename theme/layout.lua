@@ -3,26 +3,27 @@ local layout = {}
 -- SitRep is authored in one live coordinate space, same as OSA's chassis.
 -- Conky window dimensions are derived at runtime from this frame.
 --
--- Base dimensions are provisional — carried over from the sizing sketch in
--- gtex62-core/docs/sitrep-relocation-plan.md (wide enough for a stacked
--- pfSense/router/pfBlockerNG/Pi-hole/VPN/modem/AP/devices status column).
--- Real geometry is future panel-design work, not decided here.
+-- Base dimensions match the annotated previz (design/gtex62-sitrep-02.png,
+-- design/gtex62-sitrep-measured-02.png): 750px outer frame / 698px inner
+-- content width / 990px inner content height. Pixel-measured against the
+-- previz (border-run detection, not just the annotation labels); expect
+-- fine adjustment once frames are actually visible on screen.
 layout.frame = {
   x = 0,
   y = 0,
-  width = 900,
-  height = 1200,
+  width = 750,
+  height = 990,
 }
 
 -- scale_mode: "manual" uses layout.scale directly.
 -- scale_mode: "auto" computes scale from CONKY_SCREEN_W/H vs frame dimensions.
 -- Frame dimensions are the base (scale=1.0) coordinate space.
 layout.scale_mode = "manual"
-layout.scale = 1.0
+layout.scale = 1.25 -- scale change requires restart
 
 -- SitRep is single-panel, so there is only one column for now.
 layout.columns = {
-  main = { x = 24, width = 852 },
+  main = { x = 24, width = 698 },
 }
 
 layout.rows = {

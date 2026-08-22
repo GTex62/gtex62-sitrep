@@ -23,10 +23,10 @@ local engine_runtime = load_engine_runtime()
 
 -- Monitor selection (0 = primary, 1 = secondary). Provisional — pending final
 -- size/placement confirmation once SitRep is actually laid out on-screen.
-theme.monitor_head = 0
+theme.monitor_head = 1
 
 -- Palette (own catalog — env override mirrors OSA's CONKY_OSA_PALETTE pattern)
-theme.default_palette = palette_catalog.default or "phosphor"
+theme.default_palette = palette_catalog.default or "amber"
 theme.active_palette = os.getenv("CONKY_SITREP_PALETTE") or theme.default_palette
 theme.palettes = palette_catalog.palettes or {}
 
@@ -81,17 +81,60 @@ theme.frame_lights = {
   radius_y_scale = 1.0,
   alpha_scale = 1.0,
   top_frame_y_offset = 18,
-  light_count = 1,
+  -- 2 fixtures at 290px apart (vs. OSA's 6, same 290px gap, across its
+  -- ~2.3x wider frame) — same per-light spacing as OSA, just fewer of them
+  -- to fit SitRep's narrower 750px frame. Each fixture reuses OSA's exact
+  -- 6-layer glow stack below unchanged (same lit-panel look/identity
+  -- across suites), only the count differs.
+  light_count = 2,
   light_gap = 290,
   lights = {
-    -- SitRep-tuned light rig; single top light for now. Same shape as OSA's,
-    -- own count/placement to taste once the chassis is actually laid out.
+    {
+      x = "center",
+      y = 10,
+      radius = 11.451,
+      radius_y = 6.972,
+      color = { 1.0, 0.90, 0.90 },
+      alpha = 0.7,
+    },
+    {
+      x = "center",
+      y = 22,
+      radius = 22.37,
+      radius_y = 7.465,
+      color = { 1.0, 0.89, 0.86 },
+      alpha = 0.12,
+    },
+    {
+      x = "center",
+      y = 24,
+      radius = 20.248,
+      radius_y = 9.704,
+      color = { 1.0, 0.88, 0.82 },
+      alpha = 0.22,
+    },
+    {
+      x = "center",
+      y = 26,
+      radius = 28.087,
+      radius_y = 12.69,
+      color = { 1.0, 0.86, 0.78 },
+      alpha = 0.20,
+    },
+    {
+      x = "center",
+      y = 28,
+      radius = 39.192,
+      radius_y = 16.423,
+      color = { 1.0, 0.84, 0.74 },
+      alpha = 0.16,
+    },
     {
       x = "center",
       y = "top_frame",
-      radius = 40.0,
-      radius_y = 20.0,
-      color = { 1.0, 0.9, 0.9 },
+      radius = 53.561,
+      radius_y = 30.902,
+      color = { 1.0, 0.82, 0.70 },
       alpha = 0.3,
     },
   },
@@ -102,22 +145,22 @@ theme.frame_lights = {
 ----------------------------------------------------------------
 theme.fonts = {
   title = "Eurostile LT Std",
-  data = "JetBrainsMono Nerd Font",
+  data = "GTex62 OSA",
 }
 
 theme.text = {
-  panel_title_pt = 18,
-  body_pt = 16,
-  body_sm_pt = 14,
-  body_xs_pt = 13,
+  panel_title_pt = 21,
+  body_pt = 18,
+  body_sm_pt = 16,
+  body_xs_pt = 14,
   micro_pt = 12,
 }
 
 theme.spacing = {
   grid = 8,
-  title_pad_x = 24,
+  title_pad_x = 32,
   title_clearance = 8,
-  box_title_x = 16,
+  box_title_x = 20,
 }
 
 function theme.session_text_scale()

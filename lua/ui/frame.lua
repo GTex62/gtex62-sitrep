@@ -28,6 +28,23 @@ local function fill_rect(cr, x, y, w, h, color)
   cairo_fill(cr)
 end
 
+-- Even-odd-fill hollow rectangle, exact stroke width regardless of line
+-- position (unlike draw_rect's centered cairo_stroke). Used for the outer
+-- chassis border, same technique as OSA's frame.lua.
+local function draw_frame_rect(cr, x, y, w, h, line_width, color, alpha)
+  local stroke = tonumber(line_width) or 1
+  local inner_w = math.max(0, w - (stroke * 2))
+  local inner_h = math.max(0, h - (stroke * 2))
+  set_rgba(cr, color, tonumber(alpha) or 1.0)
+  cairo_save(cr)
+  cairo_new_path(cr)
+  cairo_rectangle(cr, x, y, w, h)
+  cairo_rectangle(cr, x + stroke, y + stroke, inner_w, inner_h)
+  cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD)
+  cairo_fill(cr)
+  cairo_restore(cr)
+end
+
 local function resolve_scale(layout)
   local mode = layout and layout.scale_mode or "manual"
   if mode == "auto" then
@@ -273,58 +290,72 @@ local function draw_frame_shadow(cr, frame, theme)
   cairo_restore(cr)
 end
 
-local function draw_panel_title(cr, panel, theme)
-  local title = panel.title
+-- Masks the border stroke behind (x,y) with a bg-colored patch and draws
+-- `title` inline on top of it, same "-TITLE-" cutout convention for both
+-- panel titles and box titles — only the font size and x/y anchor differ.
+local function draw_inline_title(cr, x, y, title, theme, font_pt)
   if not title or title == "" then return end
 
   local title_font = theme.fonts.title
-  local title_pt = theme.text.panel_title_pt
-  local pad_x = theme.spacing.title_pad_x
   local clearance = theme.spacing.title_clearance
-  local x = panel.x + pad_x
-  local y = panel.y
 
   cairo_select_font_face(cr, title_font, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
-  cairo_set_font_size(cr, title_pt)
+  cairo_set_font_size(cr, font_pt)
 
   local ext = cairo_text_extents_t:create()
   cairo_text_extents(cr, title, ext)
 
-  -- Mask the frame stroke behind the title so it reads inline, same
-  -- convention as OSA's chassis titles.
   set_rgb(cr, theme.colors.bg)
-  cairo_rectangle(cr, x - clearance, y - (title_pt * 0.55), ext.width + clearance * 2, title_pt + clearance)
+  cairo_rectangle(cr, x - clearance, y - (font_pt * 0.55), ext.width + clearance * 2, font_pt + clearance)
   cairo_fill(cr)
 
   set_rgb(cr, theme.colors.fg)
-  cairo_move_to(cr, x, y + (title_pt * 0.35))
+  cairo_move_to(cr, x, y + (font_pt * 0.35))
   cairo_show_text(cr, title)
 end
 
+local function draw_panel_title(cr, panel, theme)
+  local pad_x = theme.spacing.title_pad_x
+  draw_inline_title(cr, panel.x + pad_x, panel.y, panel.title, theme, theme.text.panel_title_pt)
+end
+
+-- Box border + inline title only — no data/table content. A box with
+-- `border = false` (e.g. the header block, which has no border of its own
+-- in the previz) skips the rectangle; a box with no `title` skips the label.
 local function draw_panel_boxes(cr, panel, theme)
   local boxes = panel.boxes
   if type(boxes) ~= "table" then return end
 
+  local pad_x = theme.spacing.box_title_x or theme.spacing.title_pad_x
+
   for _, box in pairs(boxes) do
-    draw_rect(cr, panel.x + box.x, panel.y + box.y, box.width, box.height, theme.strokes.line, theme.colors.fg)
+    local box_x = panel.x + box.x
+    local box_y = panel.y + box.y
+    if box.border ~= false then
+      draw_rect(cr, box_x, box_y, box.width, box.height, theme.strokes.line, theme.colors.fg)
+    end
+    draw_inline_title(cr, box_x + pad_x, box_y, box.title, theme, theme.text.body_sm_pt)
   end
 end
 
--- Draws the SitRep chassis: background fill, panel frame(s), panel
--- title(s), frame shadow/light FX. `widgets` is accepted for future parity
--- with OSA's per-panel data-provider table but is unused here — no panel
--- content exists yet.
+-- Draws the SitRep chassis: background fill, outer chassis border, panel
+-- frame(s), panel/box titles, frame shadow/light FX. `widgets` is accepted
+-- for future parity with OSA's per-panel data-provider table but is unused
+-- here — no panel content exists yet. Draw order mirrors OSA's frame.lua:
+-- bg -> shadow -> panels/boxes/titles -> lights -> outer border (on top,
+-- so it isn't dimmed by the shadow bands or covered by light bleed).
 function M.draw(cr, theme, layout, panels, widgets)
   if type(theme) ~= "table" or type(layout) ~= "table" then return end
   widgets = widgets or {}
 
-  local frame = layout.frame or { x = 0, y = 0, width = 900, height = 1200 }
+  local frame = layout.frame or { x = 0, y = 0, width = 750, height = 990 }
   local scale = resolve_scale(layout)
 
   cairo_save(cr)
   cairo_scale(cr, scale, scale)
 
   fill_rect(cr, frame.x, frame.y, frame.width, frame.height, theme.colors.bg)
+  draw_frame_shadow(cr, frame, theme)
 
   local resolved_panels = resolve_panels(panels or {}, layout)
   for _, panel in pairs(resolved_panels) do
@@ -333,8 +364,18 @@ function M.draw(cr, theme, layout, panels, widgets)
     draw_panel_boxes(cr, panel, theme)
   end
 
-  draw_frame_shadow(cr, frame, theme)
   draw_frame_lights(cr, frame, theme)
+
+  draw_frame_rect(
+    cr,
+    frame.x,
+    frame.y,
+    frame.width,
+    frame.height,
+    theme.strokes.frame or theme.strokes.line,
+    theme.colors.fg,
+    theme.strokes.frame_alpha
+  )
 
   cairo_restore(cr)
 end

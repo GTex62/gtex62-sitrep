@@ -24,3 +24,8 @@ wallpapers_dir = "../gtex62-shared-assets/wallpapers"
 default_palette = "phosphor"
 palette_catalog = "theme/palettes.lua"
 palette_format = "role3"
+
+[[instances.chassis]]
+id          = "main"
+conf        = "widgets/sitrep-main.conky.conf"
+description = "SitRep main window (all panels)."

@@ -56,7 +56,10 @@ wait_pid_file_exit() {
 
 stop_pid_file "$LAUNCHER_PID_FILE"
 stop_pid_file "$CONKY_PID_FILE"
-pkill -x conky 2>/dev/null || true
+# Scoped to this suite's own conky windows only (matches gtex62-clean-suite-e's
+# convention) — a blanket `pkill -x conky` here would also kill any other
+# suite's conky (e.g. gtex62-osa) running at the same time.
+pkill -f "$SUITE_DIR/widgets/" 2>/dev/null || true
 wait_pid_file_exit "$LAUNCHER_PID_FILE"
 wait_pid_file_exit "$CONKY_PID_FILE"
 

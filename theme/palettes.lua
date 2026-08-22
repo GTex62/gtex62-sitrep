@@ -1,5 +1,5 @@
 return {
-  default = "phosphor",
+  default = "amber",
   palettes = {
     -- Core palettes
     amber = {
