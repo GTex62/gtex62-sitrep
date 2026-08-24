@@ -728,9 +728,21 @@ local function draw_wan_content(cr, panel, theme, widgets)
 
   draw_table_header(cr, content_x, content_y, gw_w, header_h, "GATEWAY", header_font_pt, theme)
 
+  -- No-data case (nil, not a numeric placeholder — see pf.lua's
+  -- gateway_meter_fields()) renders as an explicit "XXX"/"XXX%" label,
+  -- same digit width as a real reading, rather than formatting a fake
+  -- number that could pass for a real one. The bar itself still falls
+  -- back to 0 below (tonumber(nil) or 0), so a no-data bar draws at
+  -- zero height alongside the XXX label.
+  local function bar_label(value, suffix)
+    local n = tonumber(value)
+    if not n then return "XXX" .. suffix end
+    return string.format("%03d%s", math.floor(n + 0.5), suffix)
+  end
+
   local bars = {
-    { value = data.loss_pct, label = string.format("%03d%%", math.floor((tonumber(data.loss_pct) or 0) + 0.5)) },
-    { value = data.avg_ms,   label = string.format("%03d", math.floor((tonumber(data.avg_ms) or 0) + 0.5)) },
+    { value = data.loss_pct, label = bar_label(data.loss_pct, "%") },
+    { value = data.avg_ms,   label = bar_label(data.avg_ms, "") },
   }
   local total_bars_w = (#bars * bar_w) + ((#bars - 1) * bar_gap)
   local first_bar_x = content_x + ((gw_w - total_bars_w) / 2)
@@ -846,11 +858,17 @@ local function draw_vpn_ltncy_meter(cr, x, y, cfg, theme, value)
     draw_hline(cr, tick_x - len + 1, tick_x, tick_y, theme.strokes.line, theme.colors.fg)
   end
 
-  local numeric = tonumber(value) or 0
-  draw_text_left(cr, x + value_x, y + value_y, string.format("%03d", math.floor(numeric + 0.5)), theme.fonts.data,
-    value_font_pt, theme.colors.fg)
+  -- No-data case (nil, not a numeric placeholder — see vpn.lua's
+  -- ltncy_meter_fields()) renders as an explicit "XXX" label, same
+  -- digit width as a real reading, rather than a plausible-looking
+  -- fake number. The bar itself still falls back to 0 below, so a
+  -- no-data reading draws at zero height alongside the XXX label —
+  -- same convention as the WAN GATEWAY meter's own no-data case.
+  local numeric = tonumber(value)
+  local label = numeric and string.format("%03d", math.floor(numeric + 0.5)) or "XXX"
+  draw_text_left(cr, x + value_x, y + value_y, label, theme.fonts.data, value_font_pt, theme.colors.fg)
 
-  local ratio = math.max(0, math.min(1, numeric / bar_max))
+  local ratio = math.max(0, math.min(1, (numeric or 0) / bar_max))
   local fill_h = math.floor((vertical_h * ratio) + 0.5)
   if fill_h > 0 then
     fill_rect(cr, x + bar_x, tick_bottom - fill_h, bar_width, fill_h, theme.colors.fg)

@@ -77,9 +77,10 @@ and the CM1000 detail column.
   AVG bar is scaled 0–100ms, not auto-ranged — a bar that looks
   "full" for AVG means ≥100ms to the gateway, not a maxed-out
   percentage.
-  Falls back to a fixed placeholder (`LOSS 25%` / `AVG 53`) when the
-  state chain isn't clean, or when reading an old cache written
-  before `loss_pct`/`latency_ms` existed in `status.json`.
+  No-data case (state chain unclean, or an old cache written before
+  `loss_pct`/`latency_ms` existed in `status.json`): `LOSS XXX%` /
+  `AVG XXX` with both bars at zero height — an obviously-fake
+  placeholder rather than a plausible-looking number.
 - **CM1000 column** — from `modem/<profile>/status.json`:
   - `T3 x N (HH)` — `recent_t3_timeouts` over the collector's own
     logging window (`event_log_window_minutes`, rendered as whole
@@ -137,10 +138,10 @@ cache file and TTL.
   the tunnel). Same 0–100 scale as the WAN GATEWAY meter's AVG bar
   (`theme.vpn.ltncy_meter.bar_max`), not auto-ranged. `tunnel_latency_ms`
   is `null` both when disconnected (`health` = `DEAD`) and when the
-  ping itself fails while otherwise connected — either way, falls back
-  to a fixed placeholder (`LTNCY_MS_PLACEHOLDER = 25`) rather than a
-  state word or a zero-height bar, same convention as the GATEWAY
-  meter's own placeholder fallback.
+  ping itself fails while otherwise connected — either way, renders
+  `XXX` at zero-height bar rather than a state word or a
+  plausible-looking number, same convention as the GATEWAY meter's
+  own no-data case.
 - **STATUS block**, from `vpn/<profile>/vpn.json`:
   - Line 1 — tunnel health: `health` field from `fetch_vpn.sh`
     (`HEALTHY`/`STALE`/`DEAD`, displayed as `NOMINAL`/`STALE`/`DEAD`).

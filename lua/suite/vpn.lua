@@ -12,10 +12,12 @@
 -- subcommand, and PIA's own per-region LatencyTracker is internal daemon
 -- RPC state, unreachable from here). Same GATEWAY-meter treatment as
 -- pf.lua's gateway_meter_fields(): its own independent state-chain read,
--- falling back to LTNCY_MS_PLACEHOLDER (not a dash/word in the bar
--- itself) whenever the chain isn't clean or tunnel_latency_ms comes back
--- null — which it does both when disconnected (health=DEAD) and when the
--- ping itself fails while otherwise connected.
+-- returning nil (not a numeric placeholder) whenever the chain isn't
+-- clean or tunnel_latency_ms comes back null — which it does both when
+-- disconnected (health=DEAD) and when the ping itself fails while
+-- otherwise connected. frame.lua's meter draws nil as an explicit "XXX"
+-- label with a zero-height bar, same obviously-fake-placeholder
+-- convention GATEWAY's meter uses.
 local M = {}
 
 local HOME = os.getenv("HOME") or ""
@@ -23,11 +25,8 @@ local SUITE_ID = os.getenv("GTEX62_SUITE_ID") or os.getenv("GTEX62_CONKY_SUITE_I
 local RUNTIME_ROOT = os.getenv("GTEX62_CONFIG_DIR") or os.getenv("GTEX62_CONKY_CONFIG_DIR") or (HOME .. "/.config/gtex62-core")
 local CACHE_ROOT = os.getenv("GTEX62_CACHE_DIR") or os.getenv("GTEX62_CONKY_CACHE_DIR") or (HOME .. "/.cache/gtex62-core")
 
-local LTNCY_MS_PLACEHOLDER = 25
-
 local CACHE = {
   tick = nil,
-  ltncy_ms = LTNCY_MS_PLACEHOLDER,
   status_lines = { "NO DATA" },
 }
 
@@ -257,11 +256,13 @@ end
 -- json_row read against vpn.json, same resolve_state_word() chain as
 -- vpn_fields() above (enabled/state/note/cache_age/cache_ttl; ssh_tripped
 -- omitted since that branch never fires here either — vpn.json has no
--- ssh_gate key). Falls back to LTNCY_MS_PLACEHOLDER, matching GATEWAY's
--- own fallback-to-fixed-number convention, whenever the chain isn't clean
--- or tunnel_latency_ms comes back null (jq's `// null` renders as an
--- empty TSV field, same as GATEWAY's missing-field case) — covers both
--- disconnected (health=DEAD) and a ping failure while otherwise connected.
+-- ssh_gate key). Returns nil, matching GATEWAY's own convention, whenever
+-- the chain isn't clean or tunnel_latency_ms comes back null (jq's
+-- `// null` renders as an empty TSV field, same as GATEWAY's
+-- missing-field case) — covers both disconnected (health=DEAD) and a
+-- ping failure while otherwise connected. frame.lua renders nil as an
+-- explicit "XXX" label with a zero-height bar, not a plausible-looking
+-- number.
 local function ltncy_meter_fields()
   local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
   local enabled = toml_bool(core_cfg, "providers", "vpn", false)
@@ -288,18 +289,18 @@ local function ltncy_meter_fields()
   })
 
   if word or ltncy_ms == "" then
-    return LTNCY_MS_PLACEHOLDER
+    return nil
   end
 
-  return tonumber(ltncy_ms) or LTNCY_MS_PLACEHOLDER
+  return tonumber(ltncy_ms)
 end
 
 function M.vpn_panel_data()
   refresh()
 
   local ltncy_ok, ltncy_ms = pcall(ltncy_meter_fields)
-  if not ltncy_ok or type(ltncy_ms) ~= "number" then
-    ltncy_ms = LTNCY_MS_PLACEHOLDER
+  if not ltncy_ok then
+    ltncy_ms = nil
   end
 
   return {

@@ -542,14 +542,12 @@ end
 -- static placeholder (fetch_pfsense.sh's gateway.online was a boolean, not
 -- a loss%/latency sample); now real, since fetch_pfsense.sh's live dpinger
 -- read added gateway.loss_pct/latency_ms/latency_stddev_ms to status.json
--- this session. Kept as the graceful-fallback shape below for a cache
--- written before that change (gateway.online present, loss_pct/latency_ms
--- not yet) and for the non-healthy resolve_state_word() branches.
-local GATEWAY_METER_PLACEHOLDER = {
-  loss_pct = 25,
-  avg_ms = 53,
-}
-
+-- this session. On no-data (see below), returns nil for both fields rather
+-- than a numeric placeholder — frame.lua's bar-drawing renders that as an
+-- explicit "XXX%"/"XXX" label with a zero-height bar, an obviously-fake
+-- placeholder rather than a plausible-looking number (a static 25%/53ms
+-- used to be indistinguishable from a real reading at a glance).
+--
 -- gateway.loss_pct/latency_ms live in the exact status.json file (and
 -- profile-root cache_ttl_sec TTL) pfsense_word()/pfsense_interfaces_fields()
 -- above already read — no independent STALE gating, same
@@ -589,12 +587,12 @@ local function gateway_meter_fields()
   -- keys not). Same graceful fallback either way, rather than drawing a
   -- meter off missing data.
   if word or loss_pct == "" or latency_ms == "" then
-    return { loss_pct = GATEWAY_METER_PLACEHOLDER.loss_pct, avg_ms = GATEWAY_METER_PLACEHOLDER.avg_ms }
+    return {}
   end
 
   return {
-    loss_pct = tonumber(loss_pct) or GATEWAY_METER_PLACEHOLDER.loss_pct,
-    avg_ms = tonumber(latency_ms) or GATEWAY_METER_PLACEHOLDER.avg_ms,
+    loss_pct = tonumber(loss_pct),
+    avg_ms = tonumber(latency_ms),
   }
 end
 
@@ -667,7 +665,7 @@ function M.wan_panel_data()
 
   local gw_ok, gw = pcall(gateway_meter_fields)
   if not gw_ok or type(gw) ~= "table" then
-    gw = { loss_pct = GATEWAY_METER_PLACEHOLDER.loss_pct, avg_ms = GATEWAY_METER_PLACEHOLDER.avg_ms }
+    gw = {}
   end
 
   return {
