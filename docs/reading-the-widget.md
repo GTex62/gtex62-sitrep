@@ -129,7 +129,18 @@ cache file and TTL.
 
 `vpn_panel_data()` in `vpn.lua`.
 
-- **LTNCY meter** — placeholder, not real data. See § 3.
+- **LTNCY meter** — real data, from `vpn.json`'s `tunnel_latency_ms`,
+  which `fetch_vpn.sh` samples live with a single ICMP echo sent
+  through the tunnel interface itself (`ping -I <iface> -c1 -W1
+  1.1.1.1`, not the VPN endpoint IP — PIA excludes the endpoint's own
+  IP from the tunnel's routes, so pinging it wouldn't actually test
+  the tunnel). Same 0–100 scale as the WAN GATEWAY meter's AVG bar
+  (`theme.vpn.ltncy_meter.bar_max`), not auto-ranged. `tunnel_latency_ms`
+  is `null` both when disconnected (`health` = `DEAD`) and when the
+  ping itself fails while otherwise connected — either way, falls back
+  to a fixed placeholder (`LTNCY_MS_PLACEHOLDER = 25`) rather than a
+  state word or a zero-height bar, same convention as the GATEWAY
+  meter's own placeholder fallback.
 - **STATUS block**, from `vpn/<profile>/vpn.json`:
   - Line 1 — tunnel health: `health` field from `fetch_vpn.sh`
     (`HEALTHY`/`STALE`/`DEAD`, displayed as `NOMINAL`/`STALE`/`DEAD`).
@@ -220,14 +231,6 @@ Things on screen right now that are **not** wired to a real signal —
 this is deliberate, not an oversight, but the number/behavior isn't
 meaningful yet.
 
-- **VPN panel's LTNCY meter** (`vpn.lua`, `LTNCY_MS_PLACEHOLDER = 25`).
-  No real source exists: `fetch_vpn.sh` only samples `piactl`
-  (connection state/region/protocol/IP) and `wg show dump` (handshake
-  age/transfer bytes) — neither is a ping/RTT sample. To make this
-  real, `fetch_vpn.sh` would need to add an actual latency probe
-  (e.g. ping through the tunnel) and write it to `vpn.json`; matches
-  the treatment already given to the WAN GATEWAY meter before *its*
-  dpinger wiring landed.
 - **Header alert-banner column** (`pf.lua`'s `M.header_alert_lines()`
   — static text: `ALERT LINE 1`, `ALERT LINE 2`,
   `MTR SCRIPT ON PI5 BEGAN 1929UTC`). No `banner.json` reading, no

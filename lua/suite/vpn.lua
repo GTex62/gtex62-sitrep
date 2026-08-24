@@ -1,17 +1,21 @@
 -- VPN box content: LTNCY meter + STATUS text block.
 --
--- STATUS is wired to fetch_vpn.sh's shared/vpn/{profile}/vpn.json
+-- Both blocks are wired to fetch_vpn.sh's shared/vpn/{profile}/vpn.json
 -- (gtex62-core/providers/vpn/fetch_vpn.sh) — a local-only collector (no
 -- SSH/ssh_gate), gated on providers.vpn (core.toml) and its own profile
 -- TTL (cache_ttl_sec, 10s default), same resolve_state_word()
 -- Disabled/Unconfigured/Stale chain used throughout pf.lua.
 --
--- LTNCY has no source: fetch_vpn.sh only samples piactl (connectionstate/
--- region/protocol/vpnip) and `wg show dump` (handshake age/transfer) —
--- neither is a ping/RTT sample. Left as a static placeholder, mirroring
--- the previz (design/gtex62-sitrep-02.png), same treatment as the WAN
--- GATEWAY meter's own placeholder — confirmed with the user rather than
--- assumed.
+-- LTNCY reads tunnel_latency_ms — a single ICMP echo through the tunnel
+-- interface (ping -I <iface> 1.1.1.1) added to fetch_vpn.sh this session;
+-- there's no pre-computed source for it (piactl has no latency/ping
+-- subcommand, and PIA's own per-region LatencyTracker is internal daemon
+-- RPC state, unreachable from here). Same GATEWAY-meter treatment as
+-- pf.lua's gateway_meter_fields(): its own independent state-chain read,
+-- falling back to LTNCY_MS_PLACEHOLDER (not a dash/word in the bar
+-- itself) whenever the chain isn't clean or tunnel_latency_ms comes back
+-- null — which it does both when disconnected (health=DEAD) and when the
+-- ping itself fails while otherwise connected.
 local M = {}
 
 local HOME = os.getenv("HOME") or ""
@@ -248,10 +252,58 @@ local function refresh()
   CACHE.status_lines = (ok and type(lines) == "table") and lines or { "NO DATA" }
 end
 
+-- VPN box, LTNCY meter: single-value ms reading, same treatment as WAN's
+-- GATEWAY meter (pf.lua's gateway_meter_fields()) — its own independent
+-- json_row read against vpn.json, same resolve_state_word() chain as
+-- vpn_fields() above (enabled/state/note/cache_age/cache_ttl; ssh_tripped
+-- omitted since that branch never fires here either — vpn.json has no
+-- ssh_gate key). Falls back to LTNCY_MS_PLACEHOLDER, matching GATEWAY's
+-- own fallback-to-fixed-number convention, whenever the chain isn't clean
+-- or tunnel_latency_ms comes back null (jq's `// null` renders as an
+-- empty TSV field, same as GATEWAY's missing-field case) — covers both
+-- disconnected (health=DEAD) and a ping failure while otherwise connected.
+local function ltncy_meter_fields()
+  local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
+  local enabled = toml_bool(core_cfg, "providers", "vpn", false)
+
+  local profile = suite_profile("vpn", "local")
+  local path = string.format("%s/shared/vpn/%s/vpn.json", CACHE_ROOT, profile)
+  local row = json_row(path,
+    '[.state, (.note // ""), (.tunnel_latency_ms // null)] | @tsv'
+  )
+  local fields = split_tsv(row, 3)
+  local state, note, ltncy_ms = fields[1], fields[2], fields[3]
+
+  local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/vpn/" .. profile .. ".toml")
+  local cache_ttl_sec = toml_number(profile_toml, "", "cache_ttl_sec", 10)
+  local mtime = file_mtime(path)
+  local cache_age_sec = mtime and (os.time() - mtime) or nil
+
+  local word = resolve_state_word({
+    enabled = enabled,
+    state = state,
+    note = note,
+    cache_age_sec = cache_age_sec,
+    cache_ttl_sec = cache_ttl_sec,
+  })
+
+  if word or ltncy_ms == "" then
+    return LTNCY_MS_PLACEHOLDER
+  end
+
+  return tonumber(ltncy_ms) or LTNCY_MS_PLACEHOLDER
+end
+
 function M.vpn_panel_data()
   refresh()
+
+  local ltncy_ok, ltncy_ms = pcall(ltncy_meter_fields)
+  if not ltncy_ok or type(ltncy_ms) ~= "number" then
+    ltncy_ms = LTNCY_MS_PLACEHOLDER
+  end
+
   return {
-    ltncy_ms = LTNCY_MS_PLACEHOLDER,
+    ltncy_ms = ltncy_ms,
     status_lines = CACHE.status_lines,
   }
 end

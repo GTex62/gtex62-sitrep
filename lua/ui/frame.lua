@@ -860,9 +860,8 @@ end
 -- VPN box content: the LTNCY meter (left column) beside a STATUS text
 -- block (right column, 5 fixed lines) — same header+text-column shape
 -- as draw_wan_content's CM1000 column. Values come from
--- widgets.vpn.vpn_panel_data(), currently a static placeholder (see
--- vpn.lua) — this function only lays out whatever it's handed.
--- Geometry from theme.vpn (theme.lua).
+-- widgets.vpn.vpn_panel_data() (see vpn.lua) — this function only lays
+-- out whatever it's handed. Geometry from theme.vpn (theme.lua).
 local function draw_vpn_content(cr, panel, theme, widgets)
   local box = panel.boxes and panel.boxes.vpn
   if not box then return end
