@@ -533,14 +533,12 @@ local function draw_header_status(cr, panel, theme, widgets)
 end
 
 -- Header block's alert-banner column (right side, divided from the status
--- column by a vertical rule at header.divider_x). Placeholder text only —
--- no banner.json reading, no real alert logic — see pf.lua's
--- header_alert_lines(). Exists purely so the header box's height gets
--- measured against its real final content (up to 3 scrolling lines) rather
--- than today's 2-line status column alone. This function should not
--- survive the alert banner build session — it gets replaced with real
--- content there, not extended.
-local function draw_header_alert_placeholder(cr, panel, theme, widgets)
+-- column by a vertical rule at header.divider_x). Real banner.json-driven
+-- content — see pf.lua's header_alert_lines() (severity-sorted,
+-- parent/child-flattened, up to 3 lines, scrolling one line at a time
+-- when more are queued). Geometry only here: reuses theme.header.status's
+-- x/y/line_step, same as the alert column always has.
+local function draw_header_alert_banner(cr, panel, theme, widgets)
   local header = panel.boxes and panel.boxes.header
   if not (header and header.divider_x) then return end
   local pf = widgets and widgets.pf
@@ -1129,7 +1127,7 @@ function M.draw(cr, theme, layout, panels, widgets)
     draw_panel_title(cr, panel, theme)
     draw_panel_boxes(cr, panel, theme)
     draw_header_status(cr, panel, theme, widgets)
-    draw_header_alert_placeholder(cr, panel, theme, widgets)
+    draw_header_alert_banner(cr, panel, theme, widgets)
     draw_pfsense_content(cr, panel, theme, widgets)
     draw_wan_content(cr, panel, theme, widgets)
     draw_vpn_content(cr, panel, theme, widgets)

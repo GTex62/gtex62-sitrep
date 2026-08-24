@@ -16,11 +16,15 @@
 local M = {}
 
 local HOME = os.getenv("HOME") or ""
+local SUITE_DIR = os.getenv("CONKY_SUITE_DIR") or (HOME .. "/.config/conky/gtex62-sitrep")
 local SUITE_ID = os.getenv("GTEX62_SUITE_ID") or os.getenv("GTEX62_CONKY_SUITE_ID") or "sitrep"
 local RUNTIME_ROOT = os.getenv("GTEX62_CONFIG_DIR") or os.getenv("GTEX62_CONKY_CONFIG_DIR") or (HOME .. "/.config/gtex62-core")
 local CACHE_ROOT = os.getenv("GTEX62_CACHE_DIR") or os.getenv("GTEX62_CONKY_CACHE_DIR") or (HOME .. "/.cache/gtex62-core")
 
-local CACHE = { tick = nil, lines = { "DOCSIS", "PFSENSE" }, boot_state_line = nil, mtr_line = nil }
+local CACHE = {
+  tick = nil, lines = { "DOCSIS", "PFSENSE" }, boot_state_line = nil, mtr_line = nil,
+  alert_tick = nil, alert_lines = { "NO DATA" },
+}
 
 local function read_file(path)
   local f = io.open(path, "r")
@@ -284,15 +288,113 @@ function M.header_status_lines()
   return CACHE.lines
 end
 
--- Placeholder only — static text, no banner.json reading, no alert logic.
--- Occupies the header's alert-banner column (right side) with its real
--- final shape (up to 3 scrolling lines, per sitrep-design-notes.md's
--- scroll-behavior spec) so the header box's height gets measured against
--- actual final content now, not today's incomplete 2-line status column
--- alone. Replace with real banner.json-driven content in the alert banner
--- build session — this function should not survive that pass.
+-- SitRep header, alert-banner column (right side): severity-sorted,
+-- parent/child-grouped alert queue from gtex62-core's alert-banner
+-- watcher (providers/alerts/fetch_alerts.sh -> shared/alerts/{profile}/
+-- banner.json). Local-only collector, no ssh_gate (same shape as
+-- vpn.lua's vpn_fields()) — gated on providers.alerts (core.toml) and
+-- its own profile TTL. No profiles/alerts/{profile}.toml ships yet
+-- (fetch_alerts.sh has no TTL notion of its own — "safe to re-run on any
+-- cadence" per its own header comment), so cache_ttl_sec below falls
+-- back to a 60s default. Note: fetch_alerts.sh also isn't wired into
+-- gtex62-core-launch or any cron yet (core.toml's providers.alerts
+-- comment), so banner.json only advances when something runs it
+-- manually — a future-session gap, not fixed here.
+--
+-- banner.json's queue[] is already severity-sorted server-side (SEVERE
+-- before CAUTION; top-level entries are never INFORMATIONAL — only
+-- children carry that tier) and parent/child grouped by nesting
+-- (children[] always present, empty array when there are none).
+-- message text is pre-built server-side and displayed verbatim — never
+-- reconstructed here.
+local function alert_banner_cfg()
+  local ok, theme = pcall(dofile, SUITE_DIR .. "/theme/theme.lua")
+  if ok and type(theme) == "table" then
+    return theme.alert_banner or {}
+  end
+  return {}
+end
+
+-- Flattens each queue entry to one display line immediately followed by
+-- its children's lines, in banner.json's existing array order — no
+-- re-sorting, re-grouping, or separating a parent from its children.
+-- Filter deliberately avoids jq's `as $var` binding: json_row() shells
+-- out through a double-quoted string (Lua's %q is Lua-string quoting,
+-- not shell quoting — it does not escape `$`), so a named variable like
+-- `$e` gets stripped by shell variable expansion before jq ever sees it.
+-- The implicit `.` already carries the right context across both parts
+-- of the comma expression, so no variable is needed.
+local function alert_flat_lines(path)
+  local lines = {}
+  local raw = json_row(path, '.queue[]? | ([.message]), (.children[]? | [.message]) | @tsv')
+  if not raw then return lines end
+  for line in raw:gmatch("[^\r\n]+") do
+    lines[#lines + 1] = line
+  end
+  return lines
+end
+
+local function alert_banner_lines()
+  local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
+  local enabled = toml_bool(core_cfg, "providers", "alerts", false)
+
+  local profile = suite_profile("alerts", "main_router")
+  local path = string.format("%s/shared/alerts/%s/banner.json", CACHE_ROOT, profile)
+  local row = json_row(path, '[.state, (.note // "")] | @tsv')
+  local fields = split_tsv(row, 2)
+  local state, note = fields[1], fields[2]
+
+  local cache_ttl_sec = toml_number(parse_simple_toml(RUNTIME_ROOT .. "/profiles/alerts/" .. profile .. ".toml"), "", "cache_ttl_sec", 60)
+  local mtime = file_mtime(path)
+  local cache_age_sec = mtime and (os.time() - mtime) or nil
+
+  local word = resolve_state_word({
+    enabled = enabled,
+    state = state,
+    note = note,
+    cache_age_sec = cache_age_sec,
+    cache_ttl_sec = cache_ttl_sec,
+  })
+  if word then
+    return { word }
+  end
+
+  local all_lines = alert_flat_lines(path)
+  if #all_lines == 0 then
+    return { "NO ACTIVE ALERTS" }
+  end
+  if #all_lines <= 3 then
+    return all_lines
+  end
+
+  -- More than 3 lines queued: the whole banner scrolls upward one line
+  -- at a time (sitrep-design-notes.md § Alert banner / outage detection,
+  -- "Scroll behavior"). window_start is a pure function of wall-clock
+  -- time (no persisted animation counter — matches this codebase's
+  -- existing os.time()-keyed recompute idiom, e.g. this file's own
+  -- refresh(), rather than inventing frame-tick state), so it can't
+  -- drift on a missed redraw and needs nothing extra preserved across
+  -- reloads. Wraps circularly (marquee-style) rather than bouncing back
+  -- to the top, so the window is always exactly 3 lines, never padded.
+  local interval = tonumber(alert_banner_cfg().scroll_interval_sec) or 3
+  if interval <= 0 then interval = 3 end
+  local total = #all_lines
+  local start = math.floor(os.time() / interval) % total
+  local shown = {}
+  for i = 0, 2 do
+    shown[#shown + 1] = all_lines[((start + i) % total) + 1]
+  end
+  return shown
+end
+
 function M.header_alert_lines()
-  return { "ALERT LINE 1", "ALERT LINE 2", "MTR SCRIPT ON PI5 BEGAN 1929UTC" }
+  local tick = os.time()
+  if CACHE.alert_tick ~= tick then
+    CACHE.alert_tick = tick
+    local ok, lines = pcall(alert_banner_lines)
+    CACHE.alert_lines = (ok and type(lines) == "table" and #lines > 0) and lines or { "NO DATA" }
+  end
+  return CACHE.alert_lines
 end
 
 -- Returns nil (row absent) or the ready-to-draw line text (row visible).

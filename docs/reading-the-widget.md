@@ -62,6 +62,38 @@ Two lines, `lua/suite/pf.lua`'s `M.header_status_lines()`.
 - **PFSENSE** — `pfsense_word()`, from `pfsense/<profile>/status.json`.
   `NOMINAL` when the state chain resolves clean.
 
+### Header — alert banner
+
+Right side of the header box, `lua/suite/pf.lua`'s `M.header_alert_lines()`
+(drawn by `lua/ui/frame.lua`'s `draw_header_alert_banner`). Reads
+`alerts/<profile>/banner.json` (`gtex62-core/providers/alerts/fetch_alerts.sh`
+— see [SitRep Architecture § Alert Banner
+Watcher](../../gtex62-core/docs/sitrep-architecture.md#alert-banner-watcher)
+for the full schema), gated on `providers.alerts` + its own profile TTL, same
+`resolve_state_word()` chain as every other panel — a stale/disabled
+**collector** is a state word, distinct from "no alerts currently active."
+
+- **Healthy, no conditions active**: single line, `NO ACTIVE ALERTS`.
+- **Healthy, conditions active**: `banner.json`'s `queue[]` is already
+  severity-sorted server-side (SEVERE before CAUTION; top-level entries are
+  never `INFORMATIONAL` — only `children[]` carry that tier). Each queue
+  entry is flattened to one line immediately followed by its children's
+  lines, preserving array order — a parent is never separated from its
+  children, even across the severity sort. Message text is pre-built
+  server-side (e.g. `COMCAST OUTAGE DETECTED`, `AP OFFLINE: <label>`,
+  `MAC/IP MISMATCH (<N>)`) and displayed verbatim.
+- Up to 3 flattened lines are shown at once. More than 3: the whole banner
+  scrolls upward one line at a time, wrapping circularly (marquee-style),
+  at `theme.alert_banner.scroll_interval_sec` (default 3s) — a pure
+  function of wall-clock time (`os.time()`), not a persisted animation
+  counter, so it can't drift on a missed redraw.
+- No profile TTL file ships yet for the `alerts` domain, so staleness falls
+  back to a 60s default (STALE fires above 120s). Also worth knowing:
+  `fetch_alerts.sh` isn't wired into `gtex62-core-launch` or any cron as of
+  this writing — `banner.json` only advances when something runs it
+  manually, so this column going `STALE` a couple minutes after the last
+  manual run is expected, not a bug.
+
 ### WAN panel
 
 `wan_panel_data()` in `pf.lua`. Two content blocks: the GATEWAY meter
@@ -232,18 +264,6 @@ Things on screen right now that are **not** wired to a real signal —
 this is deliberate, not an oversight, but the number/behavior isn't
 meaningful yet.
 
-- **Header alert-banner column** (`pf.lua`'s `M.header_alert_lines()`
-  — static text: `ALERT LINE 1`, `ALERT LINE 2`,
-  `MTR SCRIPT ON PI5 BEGAN 1929UTC`). No `banner.json` reading, no
-  alert logic at all yet — it exists only to reserve the header box's
-  real final shape (up to 3 scrolling lines) so today's layout gets
-  measured against final content instead of an empty column. See
-  [sitrep-design-notes.md § SitRep — Alert banner / outage
-  detection](../design/sitrep-design-notes.md) for the full banner
-  design (severity tiers, parent/child grouping, per-condition
-  thresholds) — none of it is consumed on the SitRep side yet, even
-  though the core-side computation and `banner.json` schema are
-  already shipped in `gtex62-core`.
 - **CM1000/WAN `DEGRADED` status word** — per
   [sitrep-design-notes.md § SitRep — CM1000 / WAN panel](../design/sitrep-design-notes.md),
   a derived state was planned (loss/duration threshold on the gateway

@@ -178,6 +178,24 @@ theme.header = {
 }
 
 ----------------------------------------------------------------
+-- Alert Banner Section
+----------------------------------------------------------------
+-- Header box's alert-banner column (right side) — timing only. Geometry
+-- (x/y/line_step) is inherited from theme.header.status above, same as
+-- the pre-Aug-24-2026 placeholder draw already did — this column shares
+-- the header box, it isn't a box of its own in panels.lua. Values come
+-- from widgets.pf.header_alert_lines(), which reads
+-- shared/alerts/{profile}/banner.json (see pf.lua).
+theme.alert_banner = {
+  -- How often the up-to-3-line display window advances by one line when
+  -- more than 3 lines are queued (sitrep-design-notes.md § Alert banner
+  -- / outage detection, "Scroll behavior" — the design left pace
+  -- undefined; 3s chosen here as a readable default). Same
+  -- config-drives-the-look convention as every other panel.
+  scroll_interval_sec = 3,
+}
+
+----------------------------------------------------------------
 -- pfSense Section
 ----------------------------------------------------------------
 -- PFSENSE box content: a system-info row (HARDWARE/VERSION/CPU/BIOS +
