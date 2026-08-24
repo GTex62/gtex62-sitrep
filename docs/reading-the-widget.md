@@ -304,19 +304,28 @@ anything failed to load.
   DOCSIS reads from) that simply has nothing to show on a normally-
   booted modem — the row only appears to report an actual boot
   problem, so its absence *is* the "all good" signal.
-- **MTR (PI5) row** (`pf.lua`'s `wan_mtr_line()`) — currently **always**
-  absent: the function hardcodes `mtr_running = false` and returns
-  `nil` unconditionally. Unlike Boot State, this isn't reading a live
-  signal that happens to be quiet — the SSH trigger that would
-  actually start `mtr_overnight_log.sh` on Pi5 during an outage is
-  deliberately unbuilt (see
+- **MTR (PI5) row** (`pf.lua`'s `wan_mtr_line()`) — now a real,
+  live-sourced row (implemented Aug 24, 2026), same "absent unless
+  there's something to report" contract as Boot State: reads
+  `mtr/<profile>/mtr_state.json`, written by `gtex62-core`'s
+  `providers/mtr/fetch_mtr.sh` — the SSH trigger to Pi5 that starts
+  (never stops — see
   [sitrep-design-notes.md § SitRep — Alert banner / outage
-  detection](../design/sitrep-design-notes.md)). So this row won't
-  appear even during a real outage yet. Once the trigger exists, this
-  should read whatever state file it writes (not just infer "should
-  be running" from gateway-offline duration, since crossing that
-  threshold means the script *should* start, not that it's confirmed
-  running).
+  detection](../design/sitrep-design-notes.md)) the pre-existing,
+  untouched `mtr_overnight_log.sh` once the gateway-offline duration
+  crosses the same threshold the SEVERE alert uses. Absent whenever
+  `running` in that file is `false`; when `true`, reads
+  `RUNNING - <N>H <NN>M` from `started_at_epoch` vs. the current time.
+  `running` reflects `fetch_mtr.sh`'s own confirm/reconfirm belief, not
+  a live per-poll `pgrep` — so a very recent start can briefly show as
+  absent until the next poll confirms it. Unlike every other row in
+  this document, this one deliberately does **not** run through
+  `resolve_state_word()` — a permanently-tripped SSH gate to Pi5
+  shouldn't turn a hidden-by-design row into a second always-on status
+  line — so it never appears in the STALE-thresholds table above, and
+  it has no `SSH DOWN`/`STALE` wording of its own; check
+  `mtr_state.json`'s own `ssh_gate`/`state` fields directly if Pi5
+  connectivity itself is in question.
 
 Both rows are drawn by the same `draw_wan_conditional_rows()` in
 `lua/ui/frame.lua`, which simply skips any row whose source function

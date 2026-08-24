@@ -239,18 +239,42 @@ local function boot_state_line(modem)
   return "BOOT STATE // " .. word
 end
 
--- WAN panel, CM1000 detail table: MTR (PI5) row. The SSH trigger that
--- actually starts mtr_overnight_log.sh on Pi5 is deliberately unbuilt (see
--- design/sitrep-design-notes.md § Alert banner / outage detection,
--- "Still open for a future build session") — this stub always reports "not
--- running" until a real signal exists. Once the trigger is built, this
--- should read whatever state file it writes rather than the gateway-offline
--- duration directly (crossing the threshold means the script *should*
--- start, not that it's confirmed running).
+-- WAN panel, CM1000 detail table: MTR (PI5) row. Reads mtr_state.json,
+-- written by gtex62-core's providers/mtr/fetch_mtr.sh — the SSH trigger
+-- to Pi5 that starts (never stops — Option B, no auto-kill; see
+-- design/sitrep-design-notes.md § Alert banner / outage detection, "MTR
+-- auto-trigger") the pre-existing, untouched mtr_overnight_log.sh once
+-- the gateway-offline duration crosses the same threshold the SEVERE
+-- alert uses. This reads that state file directly, per the stub's own
+-- prior comment — not the gateway-offline duration (crossing the
+-- threshold means the script *should* be running, not that it's
+-- confirmed running; fetch_mtr.sh's own confirm/reconfirm step is what
+-- makes `running` here trustworthy).
+--
+-- Hidden-unless-triggered, same contract as boot_state_line() above:
+-- absent whenever nothing is running, not just when data happens to be
+-- quiet. Disabled/SSH-Down/Stale precedence (resolve_state_word(),
+-- used by pfsense_word()/docsis_word()) is deliberately not surfaced
+-- here — this row is meant to stay invisible in the overwhelmingly
+-- common case (mtr_overnight_log.sh not running), so a routine SSH
+-- hiccup to Pi5 shouldn't turn it into a second always-on status line.
 local function mtr_line()
-  local mtr_running = false
-  if not mtr_running then return nil end
-  return "MTR (PI5) // RUNNING"
+  local profile = suite_profile("mtr", "pi5")
+  local path = string.format("%s/shared/mtr/%s/mtr_state.json", CACHE_ROOT, profile)
+  local row = json_row(path, '[(.running // false), (.started_at_epoch // "")] | @tsv')
+  local fields = split_tsv(row, 2)
+  local running, started_epoch = fields[1], fields[2]
+
+  if running ~= "true" then return nil end
+
+  local started = tonumber(started_epoch)
+  if not started then
+    return "MTR (PI5) // RUNNING"
+  end
+  local elapsed = math.max(0, os.time() - started)
+  local hours = math.floor(elapsed / 3600)
+  local mins = math.floor((elapsed % 3600) / 60)
+  return string.format("MTR (PI5) // RUNNING - %dH %02dM", hours, mins)
 end
 
 local function refresh()
