@@ -1,5 +1,5 @@
--- PI-HOLE box content: a 2-line SYSTEM status readout (ACTIVE/INACTIVE +
--- L15 load) beside a TOTALS label/value table (BLOCKED count + %,
+-- PI-HOLE box content: a 4-line SYSTEM status readout (ACTIVE/INACTIVE +
+-- L01/L05/L15 load) beside a TOTALS label/value table (BLOCKED count + %,
 -- DOMAINS, TOTAL queries).
 --
 -- Wired to fetch_pihole.sh's shared/pfsense/{profile}/pihole.json
@@ -175,12 +175,20 @@ local function comma_format(n)
   return sign .. formatted
 end
 
--- PI-HOLE box: SYSTEM (ACTIVE/INACTIVE + L15 load) and TOTALS (BLOCKED
--- count + %, DOMAINS, TOTAL) from pihole.json (fetch_pihole.sh). "active"
--- here is the instantaneous systemctl is-active read, not the duration-
--- gated PI-HOLE INACTIVE alert-banner condition (core.toml's
+-- PI-HOLE box: SYSTEM (ACTIVE/INACTIVE + L01/L05/L15 load) and TOTALS
+-- (BLOCKED count + %, DOMAINS, TOTAL) from pihole.json (fetch_pihole.sh).
+-- "active" here is the instantaneous systemctl is-active read, not the
+-- duration-gated PI-HOLE INACTIVE alert-banner condition (core.toml's
 -- alerts.pihole_inactive_duration_sec, 600s) — that's separate, future
 -- alert-banner work; this readout just reflects the current sample.
+--
+-- l1/l5/l15 are all already present in pihole.json's schema
+-- (/proc/loadavg on Linux always returns all three windows natively —
+-- confirmed against the live cache, fetch_pihole.sh unchanged) — this is
+-- display-only, widening the jq filter from the old l15-only read.
+-- No ncpu suffix here (unlike pf.lua's L01/L05/L15): Pi-hole's collector
+-- doesn't track core count, so none is fabricated or borrowed from
+-- pfSense's router.json.
 local function pihole_fields()
   local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
   local enabled = toml_bool(core_cfg, "providers.pfsense", "pihole", false)
@@ -189,13 +197,13 @@ local function pihole_fields()
   local path = string.format("%s/shared/pfsense/%s/pihole.json", CACHE_ROOT, profile)
   local row = json_row(path,
     '[.state, (.note // ""), (.ssh_gate.tripped // false), (.active // false), '
-    .. '(.load.l15 // 0), (.queries_blocked // 0), (.queries_total // 0), '
+    .. '(.load.l1 // 0), (.load.l5 // 0), (.load.l15 // 0), (.queries_blocked // 0), (.queries_total // 0), '
     .. '(.blocked_pct // 0), (.domains_blocked // 0)] | @tsv'
   )
-  local fields = split_tsv(row, 9)
+  local fields = split_tsv(row, 11)
   local state, note, ssh_tripped = fields[1], fields[2], fields[3]
-  local active, l15, blocked, total, blocked_pct, domains =
-    fields[4], fields[5], fields[6], fields[7], fields[8], fields[9]
+  local active, l1, l5, l15, blocked, total, blocked_pct, domains =
+    fields[4], fields[5], fields[6], fields[7], fields[8], fields[9], fields[10], fields[11]
 
   local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/pfsense/" .. profile .. ".toml")
   local cache_ttl_sec = toml_number(profile_toml, "pihole", "cache_ttl_sec", 300)
@@ -221,6 +229,8 @@ local function pihole_fields()
   return {
     system_lines = {
       (active == "true") and "ACTIVE" or "INACTIVE",
+      string.format("L01: %.2f", tonumber(l1) or 0),
+      string.format("L05: %.2f", tonumber(l5) or 0),
       string.format("L15: %.2f", tonumber(l15) or 0),
     },
     totals_rows = {

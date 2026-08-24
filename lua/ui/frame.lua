@@ -594,9 +594,9 @@ local function draw_wan_conditional_rows(cr, panel, theme, widgets)
   end
 end
 
--- PFSENSE box content: system-info row (HARDWARE/VERSION/CPU/BIOS + a
--- right-aligned LOAD cell) over an interface-throughput row (one column
--- per interface, rx value over tx value). Values come from
+-- PFSENSE box content: system-info row (HARDWARE/VERSION/CPU/BIOS +
+-- L01/L05/L15) over an interface-throughput row (one column per
+-- interface, rx value over tx value). Values come from
 -- widgets.pf.pfsense_panel_data(), which reads three independent
 -- collectors — router.json, status.json, vpn.json (see pf.lua) — this
 -- function only lays out whatever it's handed. Geometry from
@@ -637,21 +637,35 @@ local function draw_pfsense_content(cr, panel, theme, widgets)
   local sys_values = { data.hardware, data.version, data.cpu, data.bios }
 
   local cx = content_x
-  for i, w in ipairs(col_widths) do
+  for i = 1, 4 do
+    local w = col_widths[i]
     draw_table_header(cr, cx, sys_y, w, header_h, sys_labels[i] or "", header_font_pt, theme)
     draw_text_center_mid(cr, cx + (w / 2), value_mid_y, sys_values[i] or "/", theme.fonts.data, value_font_pt,
       theme.colors.fg, CAIRO_FONT_WEIGHT_NORMAL)
     cx = cx + w + col_gap
   end
 
-  local load_cfg = sys_cfg.load or {}
-  local load_w = tonumber(load_cfg.w) or 150
-  local load_x = content_x + content_w - load_w
-  local load_header_pt = tonumber(load_cfg.header_font_pt) or header_font_pt
-  local load_value_pt = tonumber(load_cfg.value_font_pt) or value_font_pt
-  draw_table_header(cr, load_x, sys_y, load_w, header_h, "LOAD", load_header_pt, theme)
-  draw_text_center_mid(cr, load_x + (load_w / 2), value_mid_y, data.load or "/", theme.fonts.data, load_value_pt,
-    theme.colors.fg, CAIRO_FONT_WEIGHT_NORMAL)
+  -- L01/L05/L15: a non-healthy load_word collapses these 3 cells into one
+  -- "LOAD" header + word spanning the merged remaining width (some words,
+  -- e.g. "STALE - 14M AGO", don't fit one 98px cell) — matching the space
+  -- the single LOAD cell used to occupy. Otherwise, three normal columns
+  -- like the loop above, reading col_widths[5..7].
+  if data.load_word then
+    local word_w = content_x + content_w - cx
+    draw_table_header(cr, cx, sys_y, word_w, header_h, "LOAD", header_font_pt, theme)
+    draw_text_center_mid(cr, cx + (word_w / 2), value_mid_y, data.load_word, theme.fonts.data, value_font_pt,
+      theme.colors.fg, CAIRO_FONT_WEIGHT_NORMAL)
+  else
+    local load_labels = { "L01", "L05", "L15" }
+    local load_values = { data.load_l1, data.load_l5, data.load_l15 }
+    for i = 1, 3 do
+      local w = col_widths[4 + i] or 98
+      draw_table_header(cr, cx, sys_y, w, header_h, load_labels[i], header_font_pt, theme)
+      draw_text_center_mid(cr, cx + (w / 2), value_mid_y, load_values[i] or "/", theme.fonts.data, value_font_pt,
+        theme.colors.fg, CAIRO_FONT_WEIGHT_NORMAL)
+      cx = cx + w + col_gap
+    end
+  end
 
   -- Interface-throughput row: one equal-width column per interface,
   -- rx value stacked over tx value.

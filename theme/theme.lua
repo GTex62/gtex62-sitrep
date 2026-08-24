@@ -199,12 +199,25 @@ theme.alert_banner = {
 -- pfSense Section
 ----------------------------------------------------------------
 -- PFSENSE box content: a system-info row (HARDWARE/VERSION/CPU/BIOS +
--- a right-aligned LOAD cell) over an interface-throughput row (one
--- column per interface, rx value over tx value). Geometry only —
--- values come from widgets.pf.pfsense_panel_data(), which reads
+-- L01/L05/L15) over an interface-throughput row (one column per
+-- interface, rx value over tx value). Geometry only — values come
+-- from widgets.pf.pfsense_panel_data(), which reads
 -- router.json/status.json/vpn.json live (see pf.lua). Coordinates are
 -- relative to the pfsense box (panels.lua's boxes.pfsense), not the
 -- panel or frame.
+--
+-- col_widths' last 3 entries (L01/L05/L15) are sized so the whole row
+-- fills content_w exactly: 96+88+64+84+98+98+98 = 626, +6 col_gaps(1px)
+-- = 632 = box.width(664) - 2*x(16). Measured against the real
+-- "GTex62 OSA" render font (cairo text_extents, not estimated): a
+-- worst-case healthy value "0.38/4C" is 77px wide in a 98px cell (21px
+-- padding — more generous than the CPU column's shipped 64px cell
+-- holding a 55px value). On a non-healthy word (frame.lua's load_word
+-- branch), the word is drawn spanning the merged L01-L15 region (296px)
+-- instead of one 98px cell — words like "STALE - 14M AGO" (165px) don't
+-- fit a single narrow cell, matching the space the old single LOAD cell
+-- used to occupy. No load sub-table needed any more — L01/L05/L15 reuse
+-- this table's own header_font_pt/value_font_pt like every other column.
 theme.pfsense = {
   system_table = {
     x = 16,
@@ -213,14 +226,9 @@ theme.pfsense = {
     value_h = 20,
     row_gap = 2,
     col_gap = 1,
-    col_widths = { 96, 88, 64, 84 },
+    col_widths = { 96, 88, 64, 84, 98, 98, 98 },
     header_font_pt = 18,
     value_font_pt = 18,
-    load = {
-      w = 150,
-      header_font_pt = 18,
-      value_font_pt = 18,
-    },
   },
   iface_table = {
     y_gap = 8, -- gap below the system-info row before this one starts
@@ -340,8 +348,8 @@ theme.pihole = {
     header_h = 16,
     header_font_pt = 18,
     text_x_pad = 0,
-    first_line_y = 52, -- baseline of the first line, offset from box top
-    line_step = 16,
+    first_line_y = 50, -- baseline of the first line, offset from box top
+    line_step = 15,
     font_pt = 16,
   },
   totals = {

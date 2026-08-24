@@ -440,10 +440,11 @@ end
 --
 -- When a collector's chain resolves to a non-healthy word, its numeric
 -- fields are dropped (nil, rendered as "/" by frame.lua's fallback) and
--- the word is surfaced once: in the LOAD cell for the router row, in the
--- first interface column's tx cell for a multi-column collector (WAN for
--- pfsense's 6, the VPN column itself for vpn.json) — matching the
--- one-word-per-line economy the header status column already uses,
+-- the word is surfaced once: spanning the merged L01-L15 width for the
+-- router row (frame.lua, same region the old single LOAD cell occupied),
+-- in the first interface column's tx cell for a multi-column collector
+-- (WAN for pfsense's 6, the VPN column itself for vpn.json) — matching
+-- the one-word-per-line economy the header status column already uses,
 -- rather than repeating the same word across every cell.
 
 local IFACE_KEYS = { "WAN", "HOME", "IOT", "GUEST", "INFRA", "CAM" }
@@ -485,10 +486,15 @@ local function strip_version_suffix(version)
   return version:match("^([%d%.]+)") or version
 end
 
-local function format_load(l5, ncpu)
-  l5, ncpu = tonumber(l5), tonumber(ncpu)
-  if not l5 or not ncpu then return nil end
-  return string.format("L5 %.2f / %dC", l5, ncpu)
+-- ncpu is polled fresh from router.json every cycle (sysctl hw.ncpu over
+-- SSH, see fetch_router.sh) — not a build-time constant — so this formats
+-- each L01/L05/L15 cell's suffix off the same single live-read ncpu value
+-- passed in by the caller, rather than hardcoding "4C" as a literal string
+-- three times.
+local function format_load_cell(value, ncpu)
+  value, ncpu = tonumber(value), tonumber(ncpu)
+  if not value or not ncpu then return nil end
+  return string.format("%.2f/%dC", value, ncpu)
 end
 
 local function hardware_model()
@@ -496,11 +502,19 @@ local function hardware_model()
   return (site_cfg.pfsense or {}).hardware_model
 end
 
--- PFSENSE panel, system-info row: VERSION/CPU/BIOS/LOAD from router.json
--- (fetch_router.sh). Independent chain, gated on providers.pfsense.router
--- and router.json's own mtime — same shape as pfsense_word() above but
--- keyed to a different collector/TTL ([router] section, 60s default,
--- matching fetch_router.sh's own default).
+-- PFSENSE panel, system-info row: VERSION/CPU/BIOS/L01/L05/L15 from
+-- router.json (fetch_router.sh). Independent chain, gated on
+-- providers.pfsense.router and router.json's own mtime — same shape as
+-- pfsense_word() above but keyed to a different collector/TTL ([router]
+-- section, 60s default, matching fetch_router.sh's own default).
+--
+-- On a non-healthy word (Disabled/Unconfigured/SSH Down/Stale/no-data),
+-- load_l1/l5/l15 are all nil and load_word carries the word instead —
+-- frame.lua draws that spanning the merged L01-L15 width rather than
+-- squeezed into one 98px cell (some words, e.g. "STALE - 14M AGO", are
+-- too wide for a single cell; the merged region is exactly the space the
+-- single LOAD cell used to occupy). Same "surfaced once" convention as
+-- pfsense_interfaces_fields()/vpn_interface_fields() below.
 local function router_fields()
   local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
   local enabled = toml_bool(core_cfg, "providers.pfsense", "router", false)
@@ -508,11 +522,13 @@ local function router_fields()
   local profile = suite_profile("pfsense", "main_router")
   local path = string.format("%s/shared/pfsense/%s/router.json", CACHE_ROOT, profile)
   local row = json_row(path,
-    '[.state, (.note // ""), (.ssh_gate.tripped // false), (.version // ""), (.hw_model // ""), (.ncpu // 0), (.load.l5 // 0), (.bios_version // "")] | @tsv'
+    '[.state, (.note // ""), (.ssh_gate.tripped // false), (.version // ""), (.hw_model // ""), (.ncpu // 0), '
+    .. '(.load.l1 // 0), (.load.l5 // 0), (.load.l15 // 0), (.bios_version // "")] | @tsv'
   )
-  local fields = split_tsv(row, 8)
+  local fields = split_tsv(row, 10)
   local state, note, ssh_tripped = fields[1], fields[2], fields[3]
-  local version, hw_model, ncpu, load_l5, bios_version = fields[4], fields[5], fields[6], fields[7], fields[8]
+  local version, hw_model, ncpu, load_l1, load_l5, load_l15, bios_version =
+    fields[4], fields[5], fields[6], fields[7], fields[8], fields[9], fields[10]
 
   local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/pfsense/" .. profile .. ".toml")
   local cache_ttl_sec = toml_number(profile_toml, "router", "cache_ttl_sec", 60)
@@ -529,13 +545,15 @@ local function router_fields()
   })
 
   if word then
-    return { version = nil, cpu = nil, bios = nil, load = word }
+    return { version = nil, cpu = nil, bios = nil, load_word = word }
   end
   return {
     version = strip_version_suffix(version),
     cpu = extract_cpu_code(hw_model),
     bios = extract_bios_ver(bios_version),
-    load = format_load(load_l5, ncpu),
+    load_l1 = format_load_cell(load_l1, ncpu),
+    load_l5 = format_load_cell(load_l5, ncpu),
+    load_l15 = format_load_cell(load_l15, ncpu),
   }
 end
 
@@ -630,7 +648,7 @@ end
 
 function M.pfsense_panel_data()
   local router_ok, router = pcall(router_fields)
-  if not router_ok then router = { load = "NO DATA" } end
+  if not router_ok then router = { load_word = "NO DATA" } end
 
   local pf_ifaces_ok, pf_ifaces = pcall(pfsense_interfaces_fields)
   if not pf_ifaces_ok then pf_ifaces = {} end
@@ -649,7 +667,10 @@ function M.pfsense_panel_data()
     version = router.version,
     cpu = router.cpu,
     bios = router.bios,
-    load = router.load,
+    load_word = router.load_word,
+    load_l1 = router.load_l1,
+    load_l5 = router.load_l5,
+    load_l15 = router.load_l15,
     interfaces = interfaces,
   }
 end
