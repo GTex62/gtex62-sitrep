@@ -538,17 +538,65 @@ function M.pfsense_panel_data()
   }
 end
 
--- WAN box, GATEWAY meter: loss%/avg-latency two-bar meter. Static
--- placeholder only, mirroring the previz (design/gtex62-sitrep-02.png) —
--- fetch_pfsense.sh's gateway.online is a boolean, not a loss%/latency
--- sample (see sitrep-relocation-plan.md's "Core trigger" note on the
--- alert banner's gateway condition). Deliberately left untouched here;
--- tracked alongside the future MTR-trigger/alert-banner loss-based
--- condition work.
+-- WAN box, GATEWAY meter: loss%/avg-latency two-bar meter. Previously a
+-- static placeholder (fetch_pfsense.sh's gateway.online was a boolean, not
+-- a loss%/latency sample); now real, since fetch_pfsense.sh's live dpinger
+-- read added gateway.loss_pct/latency_ms/latency_stddev_ms to status.json
+-- this session. Kept as the graceful-fallback shape below for a cache
+-- written before that change (gateway.online present, loss_pct/latency_ms
+-- not yet) and for the non-healthy resolve_state_word() branches.
 local GATEWAY_METER_PLACEHOLDER = {
   loss_pct = 25,
   avg_ms = 53,
 }
+
+-- gateway.loss_pct/latency_ms live in the exact status.json file (and
+-- profile-root cache_ttl_sec TTL) pfsense_word()/pfsense_interfaces_fields()
+-- above already read — no independent STALE gating, same
+-- resolve_state_word() chain. gateway.latency_stddev_ms is also written
+-- there but has no bar slot in this two-bar meter (frame.lua draws exactly
+-- LOSS/AVG) — not read here.
+local function gateway_meter_fields()
+  local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
+  local enabled = toml_bool(core_cfg, "providers.pfsense", "status", false)
+
+  local profile = suite_profile("pfsense", "main_router")
+  local path = string.format("%s/shared/pfsense/%s/status.json", CACHE_ROOT, profile)
+  local row = json_row(path,
+    '[.state, (.note // ""), (.ssh_gate.tripped // false), (.gateway.loss_pct // null), (.gateway.latency_ms // null)] | @tsv'
+  )
+  local fields = split_tsv(row, 5)
+  local state, note, ssh_tripped = fields[1], fields[2], fields[3]
+  local loss_pct, latency_ms = fields[4], fields[5]
+
+  local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/pfsense/" .. profile .. ".toml")
+  local cache_ttl_sec = toml_number(profile_toml, "", "cache_ttl_sec", 30)
+  local mtime = file_mtime(path)
+  local cache_age_sec = mtime and (os.time() - mtime) or nil
+
+  local word = resolve_state_word({
+    enabled = enabled,
+    state = state,
+    note = note,
+    ssh_tripped = ssh_tripped,
+    cache_age_sec = cache_age_sec,
+    cache_ttl_sec = cache_ttl_sec,
+  })
+
+  -- word set: Disabled/Unconfigured/SSH Down/Stale/no-data — fall back.
+  -- word nil but loss_pct/latency_ms empty: a cache written before this
+  -- session's fetch_pfsense.sh change (gateway.online present, the two new
+  -- keys not). Same graceful fallback either way, rather than drawing a
+  -- meter off missing data.
+  if word or loss_pct == "" or latency_ms == "" then
+    return { loss_pct = GATEWAY_METER_PLACEHOLDER.loss_pct, avg_ms = GATEWAY_METER_PLACEHOLDER.avg_ms }
+  end
+
+  return {
+    loss_pct = tonumber(loss_pct) or GATEWAY_METER_PLACEHOLDER.loss_pct,
+    avg_ms = tonumber(latency_ms) or GATEWAY_METER_PLACEHOLDER.avg_ms,
+  }
+end
 
 -- WAN box, CM1000 column: T3 count / DS2 SNR / US AVG power, from modem's
 -- status.json (fetch_modem.py). Independent Disabled/Unconfigured/Stale
@@ -617,9 +665,14 @@ function M.wan_panel_data()
     cm1000 = { "NO DATA" }
   end
 
+  local gw_ok, gw = pcall(gateway_meter_fields)
+  if not gw_ok or type(gw) ~= "table" then
+    gw = { loss_pct = GATEWAY_METER_PLACEHOLDER.loss_pct, avg_ms = GATEWAY_METER_PLACEHOLDER.avg_ms }
+  end
+
   return {
-    loss_pct = GATEWAY_METER_PLACEHOLDER.loss_pct,
-    avg_ms = GATEWAY_METER_PLACEHOLDER.avg_ms,
+    loss_pct = gw.loss_pct,
+    avg_ms = gw.avg_ms,
     cm1000 = cm1000,
   }
 end
