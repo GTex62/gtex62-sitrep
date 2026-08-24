@@ -179,16 +179,31 @@ cache file and TTL.
     (`HEALTHY`/`STALE`/`DEAD`, displayed as `NOMINAL`/`STALE`/`DEAD`).
     This is a **different** signal from the collector-level STALE in
     § 1 — it fires off the WireGuard handshake age even when
-    `vpn.json` itself is being written on schedule. Thresholds
-    (PIA's WireGuard keepalive is 25s): `HEALTHY` = connected and
-    handshake < 60s, `STALE` = connected and handshake 60–180s,
-    `DEAD` = not connected, or handshake > 180s or absent.
+    `vpn.json` itself is being written on schedule. Thresholds are
+    sized off WireGuard's own **REKEY-AFTER-TIME**, not PIA's
+    keepalive: a session renegotiates a fresh handshake once it's
+    120s old, on its own schedule, **independent of**
+    `PersistentKeepalive` (25s, confirmed live) — keepalive sends
+    just hold the NAT mapping open and don't trigger a handshake
+    renewal themselves. Live capture confirmed this directly: the
+    handshake timestamp advanced only every ~120s regardless of
+    keepalive traffic, which is why the thresholds are 120s-shaped,
+    not 25s-shaped. `HEALTHY` = connected and handshake < 130s (full
+    normal rekey cycle plus margin), `STALE` = connected and
+    handshake 130–180s (past normal rekey, not yet
+    REJECT-AFTER-TIME), `DEAD` = not connected, or handshake > 180s
+    (REJECT-AFTER-TIME) or absent. See
+    [gtex62-core/docs/network-providers-roadmap.md § Health
+    Classification (VPN)](../../gtex62-core/docs/network-providers-roadmap.md)
+    for the full derivation.
   - `REGION:` — `region`, uppercased, from piactl.
   - `PROTOCOL:` — `WG` for WireGuard, `OVPN` for OpenVPN (unverified —
     this deployment has only ever been observed on WireGuard), raw
     uppercased value for anything else.
   - `HANDSHAKE` — `latest_handshake_seconds` formatted `M:SS`.
-    **Normal**: well under 1:00 given the 25s keepalive.
+    **Normal**: cycles up to ~2:00 (REKEY-AFTER-TIME), not the 25s
+    keepalive interval — the keepalive keeps the tunnel's NAT mapping
+    alive but doesn't reset this timer.
   - `KS` — killswitch, `ON`/`OFF`.
   - On a bad collector state, all five lines collapse to the single
     state word.
