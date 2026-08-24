@@ -408,13 +408,11 @@ theme.access_points = {
 -- Footer
 ----------------------------------------------------------------
 -- Chassis-level version-identity line, centered near the bottom of the
--- outer frame (not tied to any panel) — matches the previz. Static
--- placeholder text for now: OSA's version_identity_label()
--- (osa/lua/ui/frame.lua) builds this string at runtime from
--- core.toml/suite.toml ("CORE %s // OSA %s"); reading SitRep's real
--- versions the same way is future work, not done in this pass.
+-- outer frame (not tied to any panel) — matches the previz. Text itself
+-- is built live by version_identity_label() in lua/ui/frame.lua from
+-- core.toml/suite.toml ("CORE %s // STRP %s"); this table only holds
+-- sizing/placement.
 theme.footer = {
-  version_label = "CORE 0.3.0 // STRP 0.1.0",
   bottom_inset = 30, -- distance from the frame's bottom edge up to this label's baseline
   font_pt = 10,
 }

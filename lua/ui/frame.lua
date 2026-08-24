@@ -6,6 +6,71 @@
 -- this scaffold actually needs.
 
 local M = {}
+local HOME = os.getenv("HOME") or ""
+local SUITE_DIR = os.getenv("CONKY_SUITE_DIR") or (HOME .. "/.config/conky/gtex62-sitrep")
+local RUNTIME_ROOT = os.getenv("GTEX62_CONFIG_DIR") or os.getenv("GTEX62_CONKY_CONFIG_DIR") or (HOME .. "/.config/gtex62-core")
+
+local FOOTER_VERSION_CACHE = {
+  tick = nil,
+  label = nil,
+}
+
+local function read_file(path)
+  local f = io.open(path, "r")
+  if not f then return nil end
+  local s = f:read("*a")
+  f:close()
+  return s
+end
+
+-- Reads a single top-level `key = value` out of a TOML file (no section
+-- handling needed here — version = "..." lives above any [section] in
+-- both core.toml and suite.toml). Mirrors gtex62-osa/lua/ui/frame.lua's
+-- simple_toml_value().
+local function simple_toml_value(path, key)
+  local s = read_file(path)
+  if not s then return nil end
+
+  for line in s:gmatch("[^\r\n]+") do
+    line = line:gsub("#.*$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local parsed_key, value = line:match("^([%w_%-]+)%s*=%s*(.+)$")
+    if parsed_key == key then
+      return value:gsub('^"', ""):gsub('"$', "")
+    end
+  end
+
+  return nil
+end
+
+-- Builds the chassis footer's version-identity string from the real
+-- CORE and STRP versions, cached per-tick (os.time()) since draw_chassis_footer
+-- runs every conky refresh. CORE comes from the deployed runtime's
+-- core.toml (RUNTIME_ROOT), not this repo — gtex62-core has no in-repo
+-- version file, only the runtime copy written by
+-- gtex62-core-bootstrap-runtime. STRP comes from this repo's own
+-- suite.toml. Mirrors gtex62-osa/lua/ui/frame.lua's version_identity_label().
+local function version_identity_label()
+  local tick = os.time()
+  if FOOTER_VERSION_CACHE.tick == tick and FOOTER_VERSION_CACHE.label then
+    return FOOTER_VERSION_CACHE.label
+  end
+
+  local core_version = simple_toml_value(RUNTIME_ROOT .. "/core.toml", "version")
+    or simple_toml_value(RUNTIME_ROOT .. "/engine.toml", "version")
+    or "UNKNOWN"
+  local suite_version = simple_toml_value(SUITE_DIR .. "/suite.toml", "version")
+    or simple_toml_value(RUNTIME_ROOT .. "/suites/sitrep.toml", "version")
+    or "UNKNOWN"
+
+  FOOTER_VERSION_CACHE.tick = tick
+  FOOTER_VERSION_CACHE.label = string.format(
+    "CORE %s // STRP %s",
+    string.upper(core_version),
+    string.upper(suite_version)
+  )
+
+  return FOOTER_VERSION_CACHE.label
+end
 
 local function set_rgb(cr, color)
   cairo_set_source_rgb(cr, color[1], color[2], color[3])
@@ -1013,13 +1078,11 @@ end
 -- so it isn't dimmed by the shadow bands or covered by light bleed).
 -- Chassis footer: a single centered version-identity line near the
 -- bottom of the outer frame, not tied to any panel — matches the
--- previz. Text is a static placeholder (theme.footer.version_label,
--- see theme.lua) for now; OSA's version_identity_label()
--- (osa/lua/ui/frame.lua) builds the equivalent string at runtime from
--- core.toml/suite.toml — wiring that up here is future work.
+-- previz. Text comes from version_identity_label() above (live
+-- CORE/STRP versions from core.toml/suite.toml), not a static string.
 local function draw_chassis_footer(cr, theme, frame)
   local cfg = theme.footer or {}
-  local label = cfg.version_label
+  local label = version_identity_label()
   if not label or label == "" then return end
 
   local font_pt = tonumber(cfg.font_pt) or 14
