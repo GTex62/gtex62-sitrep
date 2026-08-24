@@ -356,7 +356,21 @@ local function alert_banner_lines()
     cache_ttl_sec = cache_ttl_sec,
   })
   if word then
-    return { word }
+    -- Every other panel sits next to its own labeled box, so a bare
+    -- state word ("STALE - 14M AGO") is self-evident there. This column
+    -- has no title of its own (right half of the header row) — prefixed
+    -- so it's self-labeled regardless of position. resolve_state_word()'s
+    -- shared chain is untouched; only this call site's return is
+    -- prefixed, so no other panel's wording changes. SSH DOWN never
+    -- reaches here (alerts has no ssh_gate, ssh_tripped omitted above,
+    -- same as vpn.lua) — DISABLED/UNCONFIGURED/STALE/NO DATA are the
+    -- reachable branches, all fall through this one prefix point.
+    -- Measured against the real column width (339px, header box width
+    -- minus the divider+inset offset) and the real font/size this column
+    -- renders at: "ALERT BANNER STALE - 14M AGO" is 302px, comfortably
+    -- under, even a 4-digit-minute edge case (324px) still fits — no
+    -- need for the shorter "ALERTS" fallback.
+    return { "ALERT BANNER " .. word }
   end
 
   local all_lines = alert_flat_lines(path)
