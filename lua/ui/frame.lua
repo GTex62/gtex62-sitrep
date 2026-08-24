@@ -891,9 +891,10 @@ end
 
 -- PFBLOCKERNG box content: two side-by-side label/value tables (IP
 -- BLOCK, DNSBL), both via the shared draw_kv_table. Values come from
--- widgets.pfblockerng.pfblockerng_panel_data(), currently a static
--- placeholder (see pfblockerng.lua) — this function only lays out
--- whatever it's handed. Geometry from theme.pfblockerng (theme.lua).
+-- widgets.pfblockerng.pfblockerng_panel_data(), wired to pfblockerng.json
+-- (see pfblockerng.lua) — this function only lays out whatever it's
+-- handed, so IP BLOCK's real 1-row/DNSBL's 3-row split just renders as
+-- an uneven pair of columns. Geometry from theme.pfblockerng (theme.lua).
 local function draw_pfblockerng_content(cr, panel, theme, widgets)
   local box = panel.boxes and panel.boxes.pfblockerng
   if not box then return end

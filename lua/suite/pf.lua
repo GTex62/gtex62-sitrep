@@ -538,28 +538,90 @@ function M.pfsense_panel_data()
   }
 end
 
--- WAN box content: GATEWAY loss/avg-latency meter + CM1000 modem detail
--- lines (T3 count, DS2 SNR, US AVG power, MTR timestamp). Static
+-- WAN box, GATEWAY meter: loss%/avg-latency two-bar meter. Static
 -- placeholder only, mirroring the previz (design/gtex62-sitrep-02.png) —
 -- fetch_pfsense.sh's gateway.online is a boolean, not a loss%/latency
 -- sample (see sitrep-relocation-plan.md's "Core trigger" note on the
--- alert banner's gateway condition), and the CM1000's SNR/power/T3
--- readouts aren't collected by any provider yet. Replace once that data
--- exists — this is unrelated to wan_boot_state_line()/wan_mtr_line()
--- above, which stay conditional rows for a still-unbuilt alert signal.
-local WAN_PANEL_PLACEHOLDER = {
+-- alert banner's gateway condition). Deliberately left untouched here;
+-- tracked alongside the future MTR-trigger/alert-banner loss-based
+-- condition work.
+local GATEWAY_METER_PLACEHOLDER = {
   loss_pct = 25,
   avg_ms = 53,
-  cm1000 = {
-    "T3 X 24 (1H)",
-    "DS2 SNR 35.8DB",
-    "US AVG 39.8DBMV",
-    "MTR (PI5) 01:39",
-  },
 }
 
+-- WAN box, CM1000 column: T3 count / DS2 SNR / US AVG power, from modem's
+-- status.json (fetch_modem.py). Independent Disabled/Unconfigured/Stale
+-- chain gated on providers.modem (core.toml) and modem's own profile TTL
+-- (cache_ttl_sec, 300s default) — same shape as router_fields() above,
+-- but with no ssh_tripped check: modem's status.json has no ssh_gate key
+-- (it's a direct HTTP scrape of the CM1000 admin UI, not an SSH
+-- collector), matching modem_fields()/docsis_word() above.
+--
+-- DS2 is downstream_ofdm_channels[1] (0-based jq index = 2nd entry, not
+-- the 1st) — confirmed against the live cache file, where that entry's
+-- snr_db (35.8) matches the previz label's "DS2 SNR 35.8DB" exactly. US
+-- AVG power is the mean power_dbmv across upstream_channels with
+-- locked == true (unlocked slots carry 0.0 and must not drag the average
+-- down). T3 count is recent_t3_timeouts, with its window
+-- (event_log_window_minutes) rendered as whole hours to match the
+-- previz's "(1H)" suffix.
+--
+-- This is unrelated to wan_boot_state_line()/wan_mtr_line() above, which
+-- stay their own conditional rows, drawn separately by
+-- draw_wan_conditional_rows() in frame.lua.
+local function cm1000_fields()
+  local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
+  local enabled = toml_bool(core_cfg, "providers", "modem", false)
+
+  local profile = suite_profile("modem", "local")
+  local path = string.format("%s/shared/modem/%s/status.json", CACHE_ROOT, profile)
+  local row = json_row(path,
+    '[.state, (.note // ""), (.recent_t3_timeouts // 0), (.event_log_window_minutes // 60), '
+    .. '(.downstream_ofdm_channels[1].snr_db // 0), '
+    .. '([.upstream_channels[]? | select(.locked) | .power_dbmv] | if length > 0 then (add / length) else 0 end)'
+    .. '] | @tsv'
+  )
+  local fields = split_tsv(row, 6)
+  local state, note = fields[1], fields[2]
+  local t3_count, window_min, ds2_snr, us_avg = fields[3], fields[4], fields[5], fields[6]
+
+  local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/modem/" .. profile .. ".toml")
+  local cache_ttl_sec = toml_number(profile_toml, "", "cache_ttl_sec", 300)
+  local mtime = file_mtime(path)
+  local cache_age_sec = mtime and (os.time() - mtime) or nil
+
+  local word = resolve_state_word({
+    enabled = enabled,
+    state = state,
+    note = note,
+    cache_age_sec = cache_age_sec,
+    cache_ttl_sec = cache_ttl_sec,
+  })
+
+  if word then
+    return { word }
+  end
+
+  local hours = math.max(1, math.floor(((tonumber(window_min) or 60) / 60) + 0.5))
+  return {
+    string.format("T3 X %d (%dH)", tonumber(t3_count) or 0, hours),
+    string.format("DS2 SNR %.1fDB", tonumber(ds2_snr) or 0),
+    string.format("US AVG %.1fDBMV", tonumber(us_avg) or 0),
+  }
+end
+
 function M.wan_panel_data()
-  return WAN_PANEL_PLACEHOLDER
+  local cm_ok, cm1000 = pcall(cm1000_fields)
+  if not cm_ok or type(cm1000) ~= "table" then
+    cm1000 = { "NO DATA" }
+  end
+
+  return {
+    loss_pct = GATEWAY_METER_PLACEHOLDER.loss_pct,
+    avg_ms = GATEWAY_METER_PLACEHOLDER.avg_ms,
+    cm1000 = cm1000,
+  }
 end
 
 return M
