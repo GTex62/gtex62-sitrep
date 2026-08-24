@@ -23,7 +23,7 @@ local engine_runtime = load_engine_runtime()
 
 -- Monitor selection (0 = primary, 1 = secondary). Provisional — pending final
 -- size/placement confirmation once SitRep is actually laid out on-screen.
-theme.monitor_head = 1
+theme.monitor_head = 0
 
 -- Palette (own catalog — env override mirrors OSA's CONKY_OSA_PALETTE pattern)
 theme.default_palette = palette_catalog.default or "amber"
@@ -161,6 +161,262 @@ theme.spacing = {
   title_pad_x = 32,
   title_clearance = 8,
   box_title_x = 20,
+}
+
+----------------------------------------------------------------
+-- Header
+----------------------------------------------------------------
+-- Same convention as OSA's SYS panel 3-line status stack
+-- (osa-theme.lua theme.sys.status, read in frame.lua's draw_sys_content):
+-- offsets from panel.x/panel.y directly, not from a sub-box.
+theme.header = {
+  status = {
+    x = 46,
+    y = 36,
+    line_step = 22,
+  },
+}
+
+----------------------------------------------------------------
+-- pfSense Section
+----------------------------------------------------------------
+-- PFSENSE box content: a system-info row (HARDWARE/VERSION/CPU/BIOS +
+-- a right-aligned LOAD cell) over an interface-throughput row (one
+-- column per interface, rx value over tx value). Geometry only —
+-- values come from widgets.pf.pfsense_panel_data(), which reads
+-- router.json/status.json/vpn.json live (see pf.lua). Coordinates are
+-- relative to the pfsense box (panels.lua's boxes.pfsense), not the
+-- panel or frame.
+theme.pfsense = {
+  system_table = {
+    x = 16,
+    y = 20,
+    header_h = 16,
+    value_h = 20,
+    row_gap = 2,
+    col_gap = 1,
+    col_widths = { 96, 88, 64, 84 },
+    header_font_pt = 18,
+    value_font_pt = 18,
+    load = {
+      w = 150,
+      header_font_pt = 18,
+      value_font_pt = 18,
+    },
+  },
+  iface_table = {
+    y_gap = 8, -- gap below the system-info row before this one starts
+    header_h = 16,
+    row_h = 18,
+    row_gap = 2,
+    col_gap = 1,
+    header_font_pt = 18,
+    value_font_pt = 16,
+  },
+}
+
+----------------------------------------------------------------
+-- WAN Section
+----------------------------------------------------------------
+-- WAN box content: a GATEWAY loss/avg-latency two-bar meter (left
+-- column) beside a CM1000 modem detail text block (right column, 4
+-- fixed lines). Geometry only — values come from
+-- widgets.pf.wan_panel_data(), currently a static placeholder (see
+-- pf.lua). Coordinates are relative to the wan box (panels.lua's
+-- boxes.wan), not the panel or frame.
+theme.wan = {
+  content_x = 16,
+  content_y = 20,
+  gateway_meter = {
+    w = 100,
+    header_h = 16,
+    header_font_pt = 18,
+    value_row_h = 20,
+    row_gap = 2,
+    body_h = 52,
+    bar_w = 8,
+    bar_gap = 24,
+    bar_max = 100, -- shared placeholder scale for both LOSS% and AVG ms bars
+    -- Center-line tick marks between header and footer, same
+    -- short/medium/long convention as OSA's theme.env.atmos.meter_marks
+    -- (osa-theme.lua) — defaults copied from there.
+    meter_marks = {
+      short = 2,
+      medium = 8,
+      long = 11,
+    },
+    footer_h = 16,
+    footer_row_gap = 2,
+    footer_col_gap = 2,
+    value_font_pt = 16,
+    value_spread = 10, -- pushes each bar's value label away from center_x, like OSA's aqi_value_spread/solar_value_spread
+    footer_font_pt = 16,
+  },
+  cm1000 = {
+    gap = 24, -- horizontal gap between the GATEWAY meter and this column
+    header_h = 16,
+    header_font_pt = 18,
+    text_x_pad = 0,
+    first_line_y = 52, -- baseline of the first line, offset from box top
+    line_step = 18,
+    font_pt = 16,
+  },
+}
+
+----------------------------------------------------------------
+-- VPN Section
+----------------------------------------------------------------
+-- VPN box content: an LTNCY meter (single vertical bar, tick marks
+-- along the right edge, value to the left — same build as OSA's
+-- theme.sys.meters.cpu, osa-theme.lua) beside a STATUS text block
+-- (header + 5 fixed lines, same shape as theme.wan.cm1000). Geometry
+-- only — values come from widgets.vpn.vpn_panel_data(), currently a
+-- static placeholder (see vpn.lua). Coordinates are relative to the
+-- vpn box (panels.lua's boxes.vpn), not the panel or frame.
+theme.vpn = {
+  content_x = 16,
+  content_y = 20,
+  ltncy_meter = {
+    width = 64, -- same meter width as OSA's cpu meter
+    header_h = 16,
+    header_font_pt = 18,
+    vertical_h = 90, -- OSA's cpu meter uses 128; shortened to fit the VPN box
+    bar_x = 44,
+    bar_width = 8,
+    value_x = 0,
+    value_y = 58,  -- scaled down from OSA's value_y=82 at the same 90/128 ratio
+    value_font_pt = 20,
+    bar_max = 100, -- placeholder scale; no real latency provider yet (see vpn.lua)
+    marks = {
+      short = 4,
+      medium = 6,
+      long = 8,
+    },
+  },
+  status = {
+    gap = 24, -- horizontal gap between the LTNCY meter and this column
+    header_h = 16,
+    header_font_pt = 18,
+    text_x_pad = 0,
+    first_line_y = 52, -- baseline of the first line, offset from box top
+    line_step = 18,
+    font_pt = 16,
+  },
+}
+
+----------------------------------------------------------------
+-- Pi-Hole Section
+----------------------------------------------------------------
+-- PI-HOLE box content: a plain 2-line SYSTEM status readout (left
+-- column) beside a TOTALS label/value table (right column, right-
+-- aligned values via the shared draw_kv_table primitive — same
+-- right-aligned-data convention as OSA's table rows). Geometry only —
+-- values come from widgets.pihole.pihole_panel_data(), currently a
+-- static placeholder (see pihole.lua). Coordinates are relative to
+-- the pihole box (panels.lua's boxes.pihole), not the panel or frame.
+theme.pihole = {
+  content_x = 16,
+  content_y = 18,
+  system = {
+    w = 88, -- shrunk so TOTALS (which auto-expands to fill the rest) gets more room
+    header_h = 16,
+    header_font_pt = 18,
+    text_x_pad = 0,
+    first_line_y = 52, -- baseline of the first line, offset from box top
+    line_step = 16,
+    font_pt = 16,
+  },
+  totals = {
+    gap = 16, -- horizontal gap between the SYSTEM and TOTALS columns
+    header_h = 16,
+    header_font_pt = 18,
+    row_gap = 2,
+    row_h = 15,
+    row_font_pt = 16,
+    label_x_pad = 0,
+    value_x_pad = 0,
+  },
+}
+
+----------------------------------------------------------------
+-- pfBlockingNG Section
+----------------------------------------------------------------
+-- PFBLOCKERNG box content: two side-by-side label/value tables (IP
+-- BLOCK, DNSBL), both drawn with the same shared draw_kv_table
+-- primitive as PI-HOLE's TOTALS column. Geometry only — values come
+-- from widgets.pfblockerng.pfblockerng_panel_data(), currently a
+-- static placeholder (see pfblockerng.lua). Coordinates are relative
+-- to the pfblockerng box (panels.lua's boxes.pfblockerng), not the
+-- panel or frame.
+theme.pfblockerng = {
+  content_x = 16,
+  content_y = 18,
+  columns = {
+    gap = 16, -- horizontal gap between the IP BLOCK and DNSBL columns
+    -- IP BLOCK, DNSBL — asymmetric: DNSBL's "QUERIES: 11,983,368" row
+    -- needs more room than IP BLOCK's short IP/HITS values. Falls back
+    -- to an equal split if left unset.
+    col_widths = { 98, 166 }, -- DNSBL trimmed 2px to fit the 8px-grid-snapped box (was 314 wide, now 312)
+    header_h = 16,
+    header_font_pt = 18,
+    row_gap = 2,
+    row_h = 18,
+    row_font_pt = 15,
+    label_x_pad = 0,
+    value_x_pad = 0,
+  },
+}
+
+
+----------------------------------------------------------------
+-- Access Points Section
+----------------------------------------------------------------
+-- ACCESS POINTS box content: one repeating block per AP — a 5-cell
+-- stat header (name + MSMTCH/CPU/CONN/UNKWN) over a fixed-height
+-- client-list area. clients.lines is a fixed row count, not a cap on
+-- what fits — every AP block reserves the same vertical space
+-- (ap_row_step) regardless of how many lines its client list actually
+-- wraps to, so AP blocks stay evenly spaced no matter the client
+-- count. ap.lua reads clients.wrap_col/lines directly (same
+-- suite-module-reads-its-own-theme-config convention as OSA's
+-- wxr.lua), so this is the single source of truth for both wrapping
+-- and layout. Geometry only — values come from
+-- widgets.ap.access_points_panel_data(), currently a static
+-- placeholder (see ap.lua). Coordinates are relative to the
+-- access_points box (panels.lua's boxes.access_points), not the
+-- panel or frame.
+theme.access_points = {
+  content_x = 16,
+  content_y = 20,
+  header_h = 16,
+  header_font_pt = 18,
+  name_w = 200,
+  name_text_pad_x = 10, -- left-aligned inset for the AP name cell (unlike the centered stat cells)
+  col_gap = 1,
+  ap_row_step = 80,     -- vertical distance from one AP block's header to the next
+  clients = {
+    lines = 3,          -- fixed row count per AP, regardless of how many lines actually wrap
+    wrap_col = 64,      -- character-column wrap width, same convention as OSA's theme.wxr.current.metar_wrap_col
+    text_x_pad = 0,
+    first_line_y = 32,  -- baseline of the first client line, offset from this AP block's own top (not the box top)
+    line_step = 18,
+    font_pt = 16,
+  },
+}
+
+----------------------------------------------------------------
+-- Footer
+----------------------------------------------------------------
+-- Chassis-level version-identity line, centered near the bottom of the
+-- outer frame (not tied to any panel) — matches the previz. Static
+-- placeholder text for now: OSA's version_identity_label()
+-- (osa/lua/ui/frame.lua) builds this string at runtime from
+-- core.toml/suite.toml ("CORE %s // OSA %s"); reading SitRep's real
+-- versions the same way is future work, not done in this pass.
+theme.footer = {
+  version_label = "CORE 0.3.0 // STRP 0.1.0",
+  bottom_inset = 30, -- distance from the frame's bottom edge up to this label's baseline
+  font_pt = 10,
 }
 
 function theme.session_text_scale()

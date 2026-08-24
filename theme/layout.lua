@@ -4,15 +4,19 @@ local layout = {}
 -- Conky window dimensions are derived at runtime from this frame.
 --
 -- Base dimensions match the annotated previz (design/gtex62-sitrep-02.png,
--- design/gtex62-sitrep-measured-02.png): 750px outer frame / 698px inner
--- content width / 990px inner content height. Pixel-measured against the
--- previz (border-run detection, not just the annotation labels); expect
--- fine adjustment once frames are actually visible on screen.
+-- design/gtex62-sitrep-measured-02.png): pixel-measured at 750px outer
+-- frame / 698px inner content width / 990px inner content height
+-- (border-run detection, not just the annotation labels), then snapped
+-- to the nearest 8px — same grid rhythm as OSA's chassis (theme.spacing.
+-- grid = 8). At layout.scale = 1.25, a multiple of 8 always lands on a
+-- whole device pixel after scaling (8 * 1.25 = 10); the unsnapped values
+-- above did not (750 * 1.25 = 937.5), which is real render blur, not
+-- just a tidiness nit.
 layout.frame = {
   x = 0,
   y = 0,
-  width = 750,
-  height = 990,
+  width = 752,
+  height = 960,
 }
 
 -- scale_mode: "manual" uses layout.scale directly.
@@ -23,7 +27,7 @@ layout.scale = 1.25 -- scale change requires restart
 
 -- SitRep is single-panel, so there is only one column for now.
 layout.columns = {
-  main = { x = 24, width = 698 },
+  main = { x = 24, width = 696 },
 }
 
 layout.rows = {
