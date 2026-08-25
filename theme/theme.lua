@@ -231,7 +231,7 @@ theme.pfsense = {
     value_font_pt = 18,
   },
   iface_table = {
-    y_gap = 8, -- gap below the system-info row before this one starts
+    y_gap = 12, -- gap below the system-info row before this one starts
     header_h = 16,
     row_h = 18,
     row_gap = 2,
