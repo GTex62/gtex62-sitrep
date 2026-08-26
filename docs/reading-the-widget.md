@@ -35,7 +35,7 @@ if that section/key is absent):
 | --- | --- | --- |
 | `pfsense/<profile>/status.json` (pfSense status, interfaces, gateway meter) | 30s | 60s |
 | `pfsense/<profile>/router.json` (VERSION/CPU/BIOS/LOAD) | 60s | 120s |
-| `pfsense/<profile>/pihole.json` | 300s | 600s (10 min) |
+| `pfsense/<profile>/pihole.json` | 60s | 120s (2 min) |
 | `pfsense/<profile>/pfblockerng.json` | 300s | 600s (10 min) |
 | `pfsense/<profile>/ap_status.json` / `ap_clients.json` | 120s | 240s (4 min) |
 | `modem/<profile>/status.json` (DOCSIS, CM1000 detail, Boot State) | 300s | 600s (10 min) |

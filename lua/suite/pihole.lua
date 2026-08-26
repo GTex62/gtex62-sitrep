@@ -16,9 +16,10 @@
 --
 -- Independent Disabled/Unconfigured/SSH-Down/Stale precedence chain
 -- (resolve_state_word(), same shape as pf.lua/vpn.lua's copies), keyed to
--- profiles/pfsense/{profile}.toml's own [pihole] section (currently absent
--- there -> falls back to fetch_pihole.sh's own 300s default, same pattern
--- router_fields() uses for [router]).
+-- profiles/pfsense/{profile}.toml's own [pihole] section, cache_ttl_sec = 60
+-- (lowered from the fetch_pihole.sh/pihole.lua built-in 300s default so the
+-- whole panel — TOTALS/BLOCKED/DOMAINS/LOAD — reads fresher; falls back to
+-- that 300s default only if the key is ever removed from the profile).
 local M = {}
 
 local HOME = os.getenv("HOME") or ""
