@@ -204,7 +204,15 @@ cache file and TTL.
     **Normal**: cycles up to ~2:00 (REKEY-AFTER-TIME), not the 25s
     keepalive interval — the keepalive keeps the tunnel's NAT mapping
     alive but doesn't reset this timer.
-  - `KS` — killswitch, `ON`/`OFF`.
+  - `KS` — killswitch, `ON`/`OFF`/`ON (ADV)`. The `(ADV)` suffix means
+    PIA's "Advanced Kill Switch" is the configured mode rather than the
+    regular "VPN Kill Switch" — a distinction `killswitch` alone can't
+    carry, since both modes route identically (`dev <iface>` +
+    `blackhole` in `piavpnFwdrt`) while connected; it comes from a
+    second, independent field (`killswitch_mode`, read from PIA's own
+    `settings.json`). See [gtex62-core/docs/network-providers-roadmap.md
+    § Killswitch Mode Detection — Advanced vs. Regular](../../gtex62-core/docs/network-providers-roadmap.md)
+    for the full investigation.
   - On a bad collector state, all five lines collapse to the single
     state word.
 

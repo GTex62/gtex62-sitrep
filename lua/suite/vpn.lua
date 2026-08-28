@@ -206,11 +206,12 @@ local function vpn_fields()
   local row = json_row(path,
     '[.state, (.note // ""), (.ssh_gate.tripped // false), (.region // ""), '
     .. '(.protocol // ""), (.latest_handshake_seconds // -1), (.killswitch // false), '
-    .. '(.health // "")] | @tsv'
+    .. '(.health // ""), (.killswitch_mode // "")] | @tsv'
   )
-  local fields = split_tsv(row, 8)
+  local fields = split_tsv(row, 9)
   local state, note, ssh_tripped = fields[1], fields[2], fields[3]
   local region, protocol, handshake_sec, killswitch, health = fields[4], fields[5], fields[6], fields[7], fields[8]
+  local killswitch_mode = fields[9]
 
   local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/vpn/" .. profile .. ".toml")
   local cache_ttl_sec = toml_number(profile_toml, "", "cache_ttl_sec", 10)
@@ -233,12 +234,27 @@ local function vpn_fields()
   local handshake_seconds = tonumber(handshake_sec)
   if handshake_seconds and handshake_seconds < 0 then handshake_seconds = nil end
 
+  -- KS ON alone can't tell regular "VPN Kill Switch" apart from PIA's
+  -- "Advanced Kill Switch" — confirmed live that piavpnFwdrt renders
+  -- identically (dev <iface> + blackhole) for both while Connected; they
+  -- only diverge at/after a voluntary disconnect, which this box doesn't
+  -- re-derive killswitch from (see fetch_vpn.sh's carry-forward comment).
+  -- killswitch_mode comes from a second, independent source instead —
+  -- PIA's own settings.json ("auto" = regular, "on" = Advanced) — so
+  -- "(ADV)" only appears when that's actually the configured mode, not
+  -- guessed from routing. Suffix only shown while KS reads ON: mode
+  -- doesn't matter for display once nothing's being enforced.
+  local ks_word = "KS OFF"
+  if killswitch == "true" then
+    ks_word = (killswitch_mode == "on") and "KS ON (ADV)" or "KS ON"
+  end
+
   return {
     health_word(health) or "NO DATA",
     "REGION: " .. (region ~= "" and region:upper() or "?"),
     "PROTOCOL: " .. (protocol_code(protocol) or "?"),
     "HANDSHAKE " .. (format_handshake_age(handshake_seconds) or "?"),
-    "KS " .. ((killswitch == "true") and "ON" or "OFF"),
+    ks_word,
   }
 end
 
