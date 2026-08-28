@@ -80,8 +80,18 @@ for the full schema), gated on `providers.alerts` + its own profile TTL, same
   entry is flattened to one line immediately followed by its children's
   lines, preserving array order — a parent is never separated from its
   children, even across the severity sort. Message text is pre-built
-  server-side (e.g. `COMCAST OUTAGE DETECTED`, `AP OFFLINE: <label>`,
-  `MAC/IP MISMATCH (<N>)`) and displayed verbatim.
+  server-side (e.g. `COMCAST OUTAGE DETECTED`, `KS BLOCKING TRAFFIC`,
+  `AP OFFLINE: <label>`, `MAC/IP MISMATCH (<N>)`) and displayed
+  verbatim. `KS BLOCKING TRAFFIC` is a deliberately distinct SEVERE
+  condition from `COMCAST OUTAGE DETECTED` — same "nothing works"
+  symptom, but PIA's Advanced Kill Switch blocking traffic while
+  disconnected, not a WAN outage (message shortened from the original
+  "ADVANCED KILL SWITCH BLOCKING ALL TRAFFIC" — measured too wide for
+  the alert-banner column's 339px width via real `text_extents` against
+  the "GTex62 OSA" render font); see
+  [gtex62-sitrep/design/sitrep-design-notes.md § Alert banner / outage
+  detection](../design/sitrep-design-notes.md) for the full condition
+  table.
 - Up to 3 flattened lines are shown at once. More than 3: the whole banner
   scrolls upward one line at a time, wrapping circularly (marquee-style),
   at `theme.alert_banner.scroll_interval_sec` (default 3s) — a pure
