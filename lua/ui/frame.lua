@@ -566,34 +566,6 @@ local function draw_header_alert_banner(cr, panel, theme, widgets)
   draw_vline(cr, panel.x + divider_line_x, top, bottom, theme.strokes.line, theme.colors.fg)
 end
 
--- WAN panel, CM1000 detail table: the Boot State and MTR (PI5) rows are
--- conditionally visible, not always-shown (see lua/suite/pf.lua's
--- wan_boot_state_line/wan_mtr_line — both return nil when the row should
--- be absent). Only these two rows exist here; the rest of the WAN/CM1000
--- detail table (gateway loss, T3/SNR/power readouts) is separate, not-yet-
--- built content.
-local function draw_wan_conditional_rows(cr, panel, theme, widgets)
-  local wan = panel.boxes and panel.boxes.wan
-  if not wan then return end
-  local pf = widgets and widgets.pf
-  if not pf then return end
-
-  local rows = {}
-  local boot_ok, boot_line = pcall(pf.wan_boot_state_line or function() return nil end)
-  if boot_ok and boot_line then rows[#rows + 1] = boot_line end
-  local mtr_ok, mtr_line = pcall(pf.wan_mtr_line or function() return nil end)
-  if mtr_ok and mtr_line then rows[#rows + 1] = mtr_line end
-  if #rows == 0 then return end
-
-  local x = panel.x + wan.x + (theme.spacing.box_title_x or 16)
-  local y = panel.y + wan.y + 40
-  local line_step = 22
-
-  for i, line in ipairs(rows) do
-    draw_text_left(cr, x, y + ((i - 1) * line_step), line, theme.fonts.data, theme.text.body_sm_pt, theme.colors.fg)
-  end
-end
-
 -- PFSENSE box content: system-info row (HARDWARE/VERSION/CPU/BIOS +
 -- L01/L05/L15) over an interface-throughput row (one column per
 -- interface, rx value over tx value). Values come from
@@ -807,7 +779,10 @@ local function draw_wan_content(cr, panel, theme, widgets)
   draw_table_header(cr, content_x + footer_cell_w + footer_col_gap, footer_y, footer_cell_w, footer_h, "AVG",
     footer_font_pt, theme)
 
-  -- CM1000 column: header + 4 fixed detail lines.
+  -- CM1000 column: header + a variable-length detail list from
+  -- pf.wan_panel_data() (3 T3/DS2/US AVG lines, or 1 state word when the
+  -- modem collector isn't healthy) plus a conditional trailing MTR (PI5)
+  -- line appended whenever mtr_overnight_log.sh is running.
   local cm_cfg = cfg.cm1000 or {}
   local cm_gap = tonumber(cm_cfg.gap) or 24
   local cm_x = content_x + gw_w + cm_gap
@@ -1148,7 +1123,6 @@ function M.draw(cr, theme, layout, panels, widgets)
     draw_pihole_content(cr, panel, theme, widgets)
     draw_pfblockerng_content(cr, panel, theme, widgets)
     draw_access_points_content(cr, panel, theme, widgets)
-    draw_wan_conditional_rows(cr, panel, theme, widgets)
   end
 
   draw_chassis_footer(cr, theme, frame)

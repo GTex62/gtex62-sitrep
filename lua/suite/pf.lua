@@ -1,5 +1,6 @@
 -- SitRep header status column (DOCSIS / PFSENSE) and the WAN panel's
--- conditional CM1000 detail rows (Boot State / MTR).
+-- CM1000 detail column (T3/DS2 SNR/US AVG power, plus the conditional
+-- MTR (PI5) row appended at the end — see cm1000_fields()/M.wan_panel_data()).
 --
 -- Reads already-written core provider output only (shared/pfsense/*,
 -- shared/modem/*, core.toml) — no new fetching or computation of network
@@ -22,7 +23,7 @@ local RUNTIME_ROOT = os.getenv("GTEX62_CONFIG_DIR") or os.getenv("GTEX62_CONKY_C
 local CACHE_ROOT = os.getenv("GTEX62_CACHE_DIR") or os.getenv("GTEX62_CONKY_CACHE_DIR") or (HOME .. "/.cache/gtex62-core")
 
 local CACHE = {
-  tick = nil, lines = { "DOCSIS", "PFSENSE" }, boot_state_line = nil, mtr_line = nil,
+  tick = nil, lines = { "DOCSIS", "PFSENSE" },
   alert_tick = nil, alert_lines = { "NO DATA" },
 }
 
@@ -178,8 +179,9 @@ local function pfsense_word()
   }) or "NOMINAL"
 end
 
--- Single read of modem's status.json shared by docsis_word() and the WAN
--- panel's boot-state row — one jq call instead of two.
+-- Single read of modem's status.json, shared by docsis_word() (and
+-- available for any other CM1000 consumer that needs Disabled/Unconfigured/
+-- Stale precedence without a second jq call).
 local function modem_fields()
   local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
   local enabled = toml_bool(core_cfg, "providers", "modem", false)
@@ -188,9 +190,9 @@ local function modem_fields()
   local path = string.format("%s/shared/modem/%s/status.json", CACHE_ROOT, profile)
   local row = json_row(
     path,
-    '[.state, (.note // ""), (.connectivity_state.status // ""), (.connectivity_state.comment // ""), (.boot_state.status // ""), (.boot_state.comment // "")] | @tsv'
+    '[.state, (.note // ""), (.connectivity_state.status // ""), (.connectivity_state.comment // "")] | @tsv'
   )
-  local fields = split_tsv(row, 6)
+  local fields = split_tsv(row, 4)
 
   local cache_ttl_sec = toml_number(parse_simple_toml(RUNTIME_ROOT .. "/profiles/modem/" .. profile .. ".toml"), "", "cache_ttl_sec", 300)
   local mtime = file_mtime(path)
@@ -202,8 +204,6 @@ local function modem_fields()
     note = fields[2],
     connectivity_status = fields[3],
     connectivity_comment = fields[4],
-    boot_status = fields[5],
-    boot_comment = fields[6],
     cache_age_sec = cache_age_sec,
     cache_ttl_sec = cache_ttl_sec,
   }
@@ -225,20 +225,6 @@ local function docsis_word(modem)
   return modem.connectivity_status:upper()
 end
 
--- WAN panel, CM1000 detail table: Boot State row. Hidden in the common
--- (healthy) case — only shown when it's actually reporting a problem, so it
--- doesn't compete for attention with Connectivity State on every screen.
-local function boot_state_line(modem)
-  if modem.boot_status == "" or modem.boot_status:upper() == "OK" then
-    return nil
-  end
-  local word = modem.boot_status:upper()
-  if modem.boot_comment ~= "" then
-    word = word .. " - " .. modem.boot_comment:upper()
-  end
-  return "BOOT STATE // " .. word
-end
-
 -- WAN panel, CM1000 detail table: MTR (PI5) row. Reads mtr_state.json,
 -- written by gtex62-core's providers/mtr/fetch_mtr.sh — the SSH trigger
 -- to Pi5 that starts (never stops — Option B, no auto-kill; see
@@ -251,13 +237,14 @@ end
 -- confirmed running; fetch_mtr.sh's own confirm/reconfirm step is what
 -- makes `running` here trustworthy).
 --
--- Hidden-unless-triggered, same contract as boot_state_line() above:
--- absent whenever nothing is running, not just when data happens to be
--- quiet. Disabled/SSH-Down/Stale precedence (resolve_state_word(),
--- used by pfsense_word()/docsis_word()) is deliberately not surfaced
--- here — this row is meant to stay invisible in the overwhelmingly
--- common case (mtr_overnight_log.sh not running), so a routine SSH
--- hiccup to Pi5 shouldn't turn it into a second always-on status line.
+-- Hidden-unless-triggered: absent whenever nothing is running, not just
+-- when data happens to be quiet. Disabled/SSH-Down/Stale precedence
+-- (resolve_state_word(), used by pfsense_word()/docsis_word()) is
+-- deliberately not surfaced here — this row is meant to stay invisible in
+-- the overwhelmingly common case (mtr_overnight_log.sh not running), so a
+-- routine SSH hiccup to Pi5 shouldn't turn it into a second always-on
+-- status line. Appended to the CM1000 column's line list by
+-- M.wan_panel_data() below, not drawn separately.
 local function mtr_line()
   local profile = suite_profile("mtr", "pi5")
   local path = string.format("%s/shared/mtr/%s/mtr_state.json", CACHE_ROOT, profile)
@@ -269,12 +256,12 @@ local function mtr_line()
 
   local started = tonumber(started_epoch)
   if not started then
-    return "MTR (PI5) // RUNNING"
+    return "MTR (PI5)"
   end
   local elapsed = math.max(0, os.time() - started)
   local hours = math.floor(elapsed / 3600)
   local mins = math.floor((elapsed % 3600) / 60)
-  return string.format("MTR (PI5) // RUNNING - %dH %02dM", hours, mins)
+  return string.format("MTR (PI5) %02d:%02d", hours, mins)
 end
 
 local function refresh()
@@ -286,25 +273,18 @@ local function refresh()
   if not pf_ok then pf_word = "NO DATA" end
 
   local modem_ok, modem = pcall(modem_fields)
-  local docsis, boot, mtr
+  local docsis
   if modem_ok then
     local d_ok, d_word = pcall(docsis_word, modem)
     docsis = d_ok and d_word or "NO DATA"
-    local b_ok, b_line = pcall(boot_state_line, modem)
-    boot = b_ok and b_line or nil
   else
     docsis = "NO DATA"
-    boot = nil
   end
-  local mtr_ok, mtr_result = pcall(mtr_line)
-  mtr = mtr_ok and mtr_result or nil
 
   CACHE.lines = {
     "DOCSIS // " .. docsis,
     "PFSENSE // " .. pf_word,
   }
-  CACHE.boot_state_line = boot
-  CACHE.mtr_line = mtr
 end
 
 function M.header_status_lines()
@@ -433,18 +413,6 @@ function M.header_alert_lines()
     CACHE.alert_lines = (ok and type(lines) == "table" and #lines > 0) and lines or { "NO DATA" }
   end
   return CACHE.alert_lines
-end
-
--- Returns nil (row absent) or the ready-to-draw line text (row visible).
-function M.wan_boot_state_line()
-  refresh()
-  return CACHE.boot_state_line
-end
-
--- Returns nil (row absent) or the ready-to-draw line text (row visible).
-function M.wan_mtr_line()
-  refresh()
-  return CACHE.mtr_line
 end
 
 -- PFSENSE box content: system-info row (HARDWARE/VERSION/CPU/BIOS/LOAD)
@@ -774,9 +742,9 @@ end
 -- (event_log_window_minutes) rendered as whole hours to match the
 -- previz's "(1H)" suffix.
 --
--- This is unrelated to wan_boot_state_line()/wan_mtr_line() above, which
--- stay their own conditional rows, drawn separately by
--- draw_wan_conditional_rows() in frame.lua.
+-- This is unrelated to mtr_line() above, which M.wan_panel_data() below
+-- appends to this column's line list as its final entry, rather than
+-- folding it in here.
 local function cm1000_fields()
   local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
   local enabled = toml_bool(core_cfg, "providers", "modem", false)
@@ -822,6 +790,13 @@ function M.wan_panel_data()
   local cm_ok, cm1000 = pcall(cm1000_fields)
   if not cm_ok or type(cm1000) ~= "table" then
     cm1000 = { "NO DATA" }
+  end
+
+  -- MTR (PI5) row: appended last, same hidden-unless-triggered contract as
+  -- mtr_line() itself — absent (nil) in the overwhelmingly common case.
+  local mtr_ok, mtr = pcall(mtr_line)
+  if mtr_ok and mtr then
+    cm1000[#cm1000 + 1] = mtr
   end
 
   local gw_ok, gw = pcall(gateway_meter_fields)
