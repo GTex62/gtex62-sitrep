@@ -668,10 +668,11 @@ local function draw_pfsense_content(cr, panel, theme, widgets)
 end
 
 -- WAN box content: GATEWAY loss/avg-latency two-bar meter (left column)
--- beside a CM1000 modem detail text block (right column, 4 fixed
--- lines). Values come from widgets.pf.wan_panel_data(), currently a
--- static placeholder (see pf.lua's WAN_PANEL_PLACEHOLDER) — this
--- function only lays out whatever it's handed. Geometry from
+-- beside a CM1000 modem detail text block (right column — see the
+-- CM1000-column comment below for its variable line count and the
+-- 6-line geometric budget it's drawn against). Values come from
+-- widgets.pf.wan_panel_data() — this function only lays out whatever
+-- it's handed, with no cap or clip of its own. Geometry from
 -- theme.wan (theme.lua). Bar-meter styling (fg-stroked frame, bottom-
 -- anchored fg fill, split footer header) follows the same idiom as
 -- OSA's meter/table widgets (osa/lua/ui/frame.lua's draw_meter_bar,
@@ -780,9 +781,17 @@ local function draw_wan_content(cr, panel, theme, widgets)
     footer_font_pt, theme)
 
   -- CM1000 column: header + a variable-length detail list from
-  -- pf.wan_panel_data() (3 T3/DS2/US AVG lines, or 1 state word when the
-  -- modem collector isn't healthy) plus a conditional trailing MTR (PI5)
-  -- line appended whenever mtr_overnight_log.sh is running.
+  -- pf.wan_panel_data() (4 T3/DS1/DS2/US AVG lines, or 1 state word when
+  -- the modem collector isn't healthy) plus a conditional trailing
+  -- MTR (PI5) line appended whenever mtr_overnight_log.sh is running —
+  -- worst case 5 lines. Nothing here caps or clips that list; it's purely
+  -- a geometric fit against theme.wan.cm1000 (first_line_y 52, line_step
+  -- 18) inside the WAN box's 144px height (theme/panels.lua) — baseline 6
+  -- lands at 142, 2px of margin, so the column has room for 6 lines
+  -- before a 7th would print past the box's own border (into the 32px
+  -- gap above the PI-HOLE box, not yet overlapping it). Confirmed
+  -- 2026-09-02 when DS1 SNR was added; see sitrep-design-notes.md § WAN
+  -- panel CM1000 column for the full investigation.
   local cm_cfg = cfg.cm1000 or {}
   local cm_gap = tonumber(cm_cfg.gap) or 24
   local cm_x = content_x + gw_w + cm_gap

@@ -1,6 +1,7 @@
 -- SitRep header status column (DOCSIS / PFSENSE) and the WAN panel's
--- CM1000 detail column (T3/DS2 SNR/US AVG power, plus the conditional
--- MTR (PI5) row appended at the end — see cm1000_fields()/M.wan_panel_data()).
+-- CM1000 detail column (T3/DS1 SNR/DS2 SNR/US AVG power, plus the
+-- conditional MTR (PI5) row appended at the end — see
+-- cm1000_fields()/M.wan_panel_data()).
 --
 -- Reads already-written core provider output only (shared/pfsense/*,
 -- shared/modem/*, core.toml) — no new fetching or computation of network
@@ -725,22 +726,30 @@ local function gateway_meter_fields()
   }
 end
 
--- WAN box, CM1000 column: T3 count / DS2 SNR / US AVG power, from modem's
--- status.json (fetch_modem.py). Independent Disabled/Unconfigured/Stale
--- chain gated on providers.modem (core.toml) and modem's own profile TTL
--- (cache_ttl_sec, 300s default) — same shape as router_fields() above,
--- but with no ssh_tripped check: modem's status.json has no ssh_gate key
--- (it's a direct HTTP scrape of the CM1000 admin UI, not an SSH
--- collector), matching modem_fields()/docsis_word() above.
+-- WAN box, CM1000 column: T3 count / DS1 SNR / DS2 SNR / US AVG power,
+-- from modem's status.json (fetch_modem.py). Independent
+-- Disabled/Unconfigured/Stale chain gated on providers.modem (core.toml)
+-- and modem's own profile TTL (cache_ttl_sec, 300s default) — same shape
+-- as router_fields() above, but with no ssh_tripped check: modem's
+-- status.json has no ssh_gate key (it's a direct HTTP scrape of the
+-- CM1000 admin UI, not an SSH collector), matching
+-- modem_fields()/docsis_word() above.
 --
--- DS2 is downstream_ofdm_channels[1] (0-based jq index = 2nd entry, not
--- the 1st) — confirmed against the live cache file, where that entry's
--- snr_db (35.8) matches the previz label's "DS2 SNR 35.8DB" exactly. US
--- AVG power is the mean power_dbmv across upstream_channels with
--- locked == true (unlocked slots carry 0.0 and must not drag the average
--- down). T3 count is recent_t3_timeouts, with its window
--- (event_log_window_minutes) rendered as whole hours to match the
--- previz's "(1H)" suffix.
+-- DS1/DS2 are downstream_ofdm_channels[0]/[1] (0-based jq index — by
+-- array position, not by which channel is actually worse) — DS2's index
+-- confirmed against the live cache file, where that entry's snr_db (35.8)
+-- matched the previz label's "DS2 SNR 35.8DB" exactly. DS1 added
+-- 2026-09-02 after a real incident showed the blind spot in only
+-- surfacing [1]: during that outage, channel 193 (index 0, previously
+-- not displayed) took the harder SNR hit (40.3 -> 22.3dB) while channel
+-- 194 (index 1, the one shown) stayed comparatively healthy — so both
+-- channels need to be visible, not just one. Same read/format/precision
+-- as DS2, no new derivation logic; drawn directly above DS2 so the pair
+-- reads together. US AVG power is the mean power_dbmv across
+-- upstream_channels with locked == true (unlocked slots carry 0.0 and
+-- must not drag the average down). T3 count is recent_t3_timeouts, with
+-- its window (event_log_window_minutes) rendered as whole hours to match
+-- the previz's "(1H)" suffix.
 --
 -- This is unrelated to mtr_line() above, which M.wan_panel_data() below
 -- appends to this column's line list as its final entry, rather than
@@ -753,13 +762,13 @@ local function cm1000_fields()
   local path = string.format("%s/shared/modem/%s/status.json", CACHE_ROOT, profile)
   local row = json_row(path,
     '[.state, (.note // ""), (.recent_t3_timeouts // 0), (.event_log_window_minutes // 60), '
-    .. '(.downstream_ofdm_channels[1].snr_db // 0), '
+    .. '(.downstream_ofdm_channels[0].snr_db // 0), (.downstream_ofdm_channels[1].snr_db // 0), '
     .. '([.upstream_channels[]? | select(.locked) | .power_dbmv] | if length > 0 then (add / length) else 0 end)'
     .. '] | @tsv'
   )
-  local fields = split_tsv(row, 6)
+  local fields = split_tsv(row, 7)
   local state, note = fields[1], fields[2]
-  local t3_count, window_min, ds2_snr, us_avg = fields[3], fields[4], fields[5], fields[6]
+  local t3_count, window_min, ds1_snr, ds2_snr, us_avg = fields[3], fields[4], fields[5], fields[6], fields[7]
 
   local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/modem/" .. profile .. ".toml")
   local cache_ttl_sec = toml_number(profile_toml, "", "cache_ttl_sec", 300)
@@ -781,6 +790,7 @@ local function cm1000_fields()
   local hours = math.max(1, math.floor(((tonumber(window_min) or 60) / 60) + 0.5))
   return {
     string.format("T3 X %d (%dH)", tonumber(t3_count) or 0, hours),
+    string.format("DS1 SNR %.1fDB", tonumber(ds1_snr) or 0),
     string.format("DS2 SNR %.1fDB", tonumber(ds2_snr) or 0),
     string.format("US AVG %.1fDBMV", tonumber(us_avg) or 0),
   }

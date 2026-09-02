@@ -38,7 +38,7 @@ if that section/key is absent):
 | `pfsense/<profile>/pihole.json` | 60s | 120s (2 min) |
 | `pfsense/<profile>/pfblockerng.json` | 300s | 600s (10 min) |
 | `pfsense/<profile>/ap_status.json` / `ap_clients.json` | 120s | 240s (4 min) |
-| `modem/<profile>/status.json` (DOCSIS, CM1000 detail, Boot State) | 300s | 600s (10 min) |
+| `modem/<profile>/status.json` (DOCSIS, CM1000 detail) | 300s | 600s (10 min) |
 | `vpn/<profile>/vpn.json` | 10s | 20s |
 
 A `STALE` word replaces that collector's numeric fields with the word
@@ -128,15 +128,20 @@ and the CM1000 detail column.
     logging window (`event_log_window_minutes`, rendered as whole
     hours). **Normal**: 0. Any count above 0 means the modem logged
     T3 (no response from CMTS) timeouts in that window.
-  - `DS2 SNR xx.xDB` — signal-to-noise ratio of the *second*
-    downstream OFDM channel (`downstream_ofdm_channels[1]`, 0-based
-    index). No modem-health thresholds are implemented yet (see § 3)
-    — read this as a trend line, not a pass/fail number.
+  - `DS1 SNR xx.xDB` / `DS2 SNR xx.xDB` — signal-to-noise ratio of
+    the *first* and *second* downstream OFDM channels
+    (`downstream_ofdm_channels[0]` / `[1]`, 0-based index — by array
+    position, not by which channel happens to be worse). Added
+    2026-09-02: a real incident showed only displaying `[1]` was a
+    blind spot — channel 193 (index 0) took the harder SNR hit while
+    channel 194 (index 1) stayed comparatively healthy, so both are
+    now shown as a pair. No modem-health thresholds are implemented
+    yet (see § 3) — read these as trend lines, not pass/fail numbers.
   - `US AVG xx.xDBMV` — mean upstream power across only the *locked*
     upstream channels (unlocked slots report 0.0 and are excluded so
     they don't drag the average down).
   - On a non-healthy state, this whole column collapses to a single
-    state word instead of three lines.
+    state word instead of four lines.
 
 ### PFSENSE panel (system-info + interface table)
 
@@ -305,26 +310,19 @@ meaningful yet.
   status word of its own. Would need threshold/duration logic added
   to `pf.lua` (or upstream in `fetch_pfsense.sh`) plus a place in the
   WAN panel to show it.
-- **Modem SNR/power health thresholds** — DS2 SNR and US AVG power are
-  displayed as raw readings with no pass/fail classification;
+- **Modem SNR/power health thresholds** — DS1/DS2 SNR and US AVG power
+  are displayed as raw readings with no pass/fail classification;
   deliberately deferred per the design notes (not enough baseline
   history yet to trust specific thresholds).
 
 ## 4. Conditional / hidden-unless-triggered fields
 
-These two WAN-panel rows are **absent by design** in the normal,
-healthy case — a blank space where they'd be is expected, not a sign
-anything failed to load.
+This WAN-panel row is **absent by design** in the normal, healthy
+case — a blank space where it'd be is expected, not a sign anything
+failed to load.
 
-- **Boot State row** (`pf.lua`'s `wan_boot_state_line()`) — only drawn
-  when the modem's `boot_state.status` is non-empty and isn't `"OK"`.
-  This is real, live-sourced data (same `modem/<profile>/status.json`
-  DOCSIS reads from) that simply has nothing to show on a normally-
-  booted modem — the row only appears to report an actual boot
-  problem, so its absence *is* the "all good" signal.
-- **MTR (PI5) row** (`pf.lua`'s `wan_mtr_line()`) — now a real,
-  live-sourced row (implemented Aug 24, 2026), same "absent unless
-  there's something to report" contract as Boot State: reads
+- **MTR (PI5) row** (`pf.lua`'s `mtr_line()`) — a real, live-sourced
+  row (implemented Aug 24, 2026): reads
   `mtr/<profile>/mtr_state.json`, written by `gtex62-core`'s
   `providers/mtr/fetch_mtr.sh` — the SSH trigger to Pi5 that starts
   (never stops — see
@@ -333,19 +331,34 @@ anything failed to load.
   untouched `mtr_overnight_log.sh` once the gateway-offline duration
   crosses the same threshold the SEVERE alert uses. Absent whenever
   `running` in that file is `false`; when `true`, reads
-  `RUNNING - <N>H <NN>M` from `started_at_epoch` vs. the current time.
-  `running` reflects `fetch_mtr.sh`'s own confirm/reconfirm belief, not
-  a live per-poll `pgrep` — so a very recent start can briefly show as
-  absent until the next poll confirms it. Unlike every other row in
-  this document, this one deliberately does **not** run through
-  `resolve_state_word()` — a permanently-tripped SSH gate to Pi5
-  shouldn't turn a hidden-by-design row into a second always-on status
-  line — so it never appears in the STALE-thresholds table above, and
-  it has no `SSH DOWN`/`STALE` wording of its own; check
-  `mtr_state.json`'s own `ssh_gate`/`state` fields directly if Pi5
-  connectivity itself is in question.
+  `MTR (PI5) HH:MM` (reformatted Aug 31, 2026, from the original
+  `MTR (PI5) // RUNNING - <N>H <NN>M`) from `started_at_epoch` vs. the
+  current time. `running` reflects `fetch_mtr.sh`'s own
+  confirm/reconfirm belief, not a live per-poll `pgrep` — so a very
+  recent start can briefly show as absent until the next poll confirms
+  it. Unlike every other row in this document, this one deliberately
+  does **not** run through `resolve_state_word()` — a
+  permanently-tripped SSH gate to Pi5 shouldn't turn a hidden-by-design
+  row into a second always-on status line — so it never appears in the
+  STALE-thresholds table above, and it has no `SSH DOWN`/`STALE`
+  wording of its own; check `mtr_state.json`'s own `ssh_gate`/`state`
+  fields directly if Pi5 connectivity itself is in question.
 
-Both rows are drawn by the same `draw_wan_conditional_rows()` in
-`lua/ui/frame.lua`, which simply skips any row whose source function
-returns `nil` — an empty result from either is a normal return value,
-not an error being swallowed.
+Appended as the CM1000 column's own final line by `pf.lua`'s
+`M.wan_panel_data()`, drawn through `draw_wan_content()`'s normal
+CM1000 column loop (`lua/ui/frame.lua`) rather than a separate draw
+pass — as of Aug 31, 2026 (see § "Boot State row — removed" below),
+there's no other conditional-row mechanism left in the WAN panel.
+
+**Boot State row — removed (Aug 31, 2026).** A prior version of this
+doc described a second conditional row, `wan_boot_state_line()`,
+surfacing the modem's `boot_state.status` when non-`"OK"`. It was
+deleted along with `draw_wan_conditional_rows()` in `frame.lua` after a
+real incident (2026-08-31 Comcast outage) showed both rows were being
+drawn at the WAN box's own left edge (`wan.x`) instead of the CM1000
+column's x-range — a separate, redundant draw pass overlaying the
+GATEWAY meter rather than sitting under CM1000. Boot State specifically
+was dropped rather than repositioned: judged redundant with the DOCSIS
+header line. Only MTR (PI5), above, remains as a conditional CM1000
+row; it no longer has a second conditional row to share a drawing
+contract with.
