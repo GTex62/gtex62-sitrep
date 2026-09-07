@@ -432,13 +432,18 @@ end
 -- ([pfsense].hardware_model) with no STALE chain of its own.
 --
 -- When a collector's chain resolves to a non-healthy word, its numeric
--- fields are dropped (nil, rendered as "/" by frame.lua's fallback) and
--- the word is surfaced once: spanning the merged L01-L15 width for the
--- router row (frame.lua, same region the old single LOAD cell occupied),
--- in the first interface column's tx cell for a multi-column collector
--- (WAN for pfsense's 6, the VPN column itself for vpn.json) — matching
--- the one-word-per-line economy the header status column already uses,
--- rather than repeating the same word across every cell.
+-- fields are dropped (nil, rendered as "/" by frame.lua's fallback). The
+-- router row still surfaces that word spanning the merged L01-L15 width
+-- (frame.lua, same region the old single LOAD cell occupied) since it has
+-- no other display location. The interface row does not: WAN/HOME/IOT/
+-- GUEST/INFRA/CAM/VPN fall back to plain "/" placeholders on a collector
+-- failure rather than repeating the word into one narrow ~89px cell —
+-- confirmed 2026-09-07 this was landing in the WAN and VPN cells
+-- (ifaces[1].tx / vpn entry.tx) and, for wider words like "STALE - NM
+-- AGO", visibly overflowing into the neighboring cell with no clipping.
+-- The header status column (pfsense_word() above) and the VPN box's own
+-- STATUS block (vpn.lua) are each collector's one authoritative surfaced
+-- location for that word; the interface table is data-only.
 
 local IFACE_KEYS = { "WAN", "HOME", "IOT", "GUEST", "INFRA", "CAM" }
 
@@ -594,9 +599,6 @@ local function pfsense_interfaces_fields()
     end
     ifaces[#ifaces + 1] = entry
   end
-  if word then
-    ifaces[1].tx = word
-  end
   return ifaces
 end
 
@@ -630,9 +632,7 @@ local function vpn_interface_fields()
   })
 
   local entry = { label = "VPN" }
-  if word then
-    entry.tx = word
-  else
+  if not word then
     entry.rx = human_bytes(rx_bytes)
     entry.tx = human_bytes(tx_bytes)
   end
