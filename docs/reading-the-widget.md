@@ -82,7 +82,12 @@ for the full schema), gated on `providers.alerts` + its own profile TTL, same
   children, even across the severity sort. Message text is pre-built
   server-side (e.g. `COMCAST OUTAGE DETECTED`, `KS BLOCKING TRAFFIC`,
   `AP OFFLINE: <label>`, `MAC/IP MISMATCH (<N>)`) and displayed
-  verbatim. `KS BLOCKING TRAFFIC` is a deliberately distinct SEVERE
+  verbatim. `COMCAST DEGRADED`'s `comcast-degraded-t3` child reads
+  `T3: <n> TOTAL SINCE <HH:MM>` (changed 2026-09-08, was `T3: <n> IN
+  <window>M`) — the `SINCE` anchor is the WAN panel's `T3 X N TOTAL`
+  line's missing timestamp; it lives here instead because this line has
+  room for both the total and the anchor together, the WAN panel's
+  CM1000 column doesn't (see § WAN panel above). `KS BLOCKING TRAFFIC` is a deliberately distinct SEVERE
   condition from `COMCAST OUTAGE DETECTED` — same "nothing works"
   symptom, but PIA's Advanced Kill Switch blocking traffic while
   disconnected, not a WAN outage (message shortened from the original
@@ -124,10 +129,23 @@ and the CM1000 detail column.
   `AVG XXX` with both bars at zero height — an obviously-fake
   placeholder rather than a plausible-looking number.
 - **CM1000 column** — from `modem/<profile>/status.json`:
-  - `T3 x N (HH)` — `recent_t3_timeouts` over the collector's own
-    logging window (`event_log_window_minutes`, rendered as whole
-    hours). **Normal**: 0. Any count above 0 means the modem logged
-    T3 (no response from CMTS) timeouts in that window.
+  - `T3 X N TOTAL` (changed 2026-09-08, was `T3 X N (HH)`) —
+    `recent_t3_timeouts`. **Normal**: 0. **Read this as a lifetime
+    count of a currently-active condition, not "N timeouts in the last
+    hour":** the CM1000 collapses a repeating identical T3 event into
+    one log row and only updates that row's `LastTime`/repeat counter,
+    so `N` is that row's *entire* history, riding along whenever its
+    `LastTime` lands inside the collector's trailing window
+    (`event_log_window_minutes`) — a count going 90 -> 91 means one
+    fresh occurrence on an old condition, not 91 new ones. Confirmed
+    live 2026-09-08 that the CM1000's own admin GUI can't even show
+    this distinction (see
+    [Network Providers Roadmap's Sept 8
+    session log](../../gtex62-core/docs/network-providers-roadmap.md)) —
+    this field is the more trustworthy read. No timestamp is shown in
+    this column (no room for it); the matching `SINCE HH:MM` anchor is
+    in the header alert banner's `comcast-degraded-t3` child instead,
+    when that alert is active — see below.
   - `DS1 SNR xx.xDB` / `DS2 SNR xx.xDB` — signal-to-noise ratio of
     the *first* and *second* downstream OFDM channels
     (`downstream_ofdm_channels[0]` / `[1]`, 0-based index — by array
