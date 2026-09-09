@@ -13,6 +13,7 @@ normalized cache SitRep reads from.
 ## Table of Contents
 
 - [Purpose](#purpose)
+- [Screenshots / Design References](#screenshots--design-references)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -51,6 +52,14 @@ to live engine cache data; this is no longer a structural scaffold. See
 [docs/reading-the-widget.md](docs/reading-the-widget.md) for the full field
 guide — what each number means, where it comes from, and what's still a
 known placeholder or deferred field.
+
+## Screenshots / Design References
+
+![gtex62-sitrep — blueprint palette, all panels live](screenshots/sitrep-main-blueprint.png)
+
+*`blueprint` palette. PFSENSE, WAN, VPN, PI-HOLE, PFBLOCKERNG, and ACCESS
+POINTS all reading live data, with the header alert banner showing an
+active `COMCAST DEGRADED` condition.*
 
 ## Requirements
 
