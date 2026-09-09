@@ -160,11 +160,19 @@ and the CM1000 detail column.
     2026-09-02: a real incident showed only displaying `[1]` was a
     blind spot — channel 193 (index 0) took the harder SNR hit while
     channel 194 (index 1) stayed comparatively healthy, so both are
-    now shown as a pair. No modem-health thresholds are implemented
-    yet (see § 3) — read these as trend lines, not pass/fail numbers.
+    now shown as a pair. **Higher is better** (it's a signal-to-*noise*
+    ratio; a low reading means more noise relative to signal). No
+    modem-health thresholds are implemented yet (see § 3) — read these
+    as trend lines, not pass/fail numbers.
   - `US AVG xx.xDBMV` — mean upstream power across only the *locked*
     upstream channels (unlocked slots report 0.0 and are excluded so
-    they don't drag the average down).
+    they don't drag the average down). **Lower is better**: a healthy
+    modem transmits at modest power, and a rising average usually means
+    it's working harder to overcome a plant/attenuation problem, not
+    that anything about the modem itself improved. Observed live: values
+    approaching ~50DBMV are real trouble, not just a number to watch —
+    still not wired into `resolve_state_word()` or any state word (see
+    § 3), so nothing changes color or text at that point yet.
   - On a non-healthy state, this whole column collapses to a single
     state word instead of four lines.
 
@@ -336,9 +344,12 @@ meaningful yet.
   to `pf.lua` (or upstream in `fetch_pfsense.sh`) plus a place in the
   WAN panel to show it.
 - **Modem SNR/power health thresholds** — DS1/DS2 SNR and US AVG power
-  are displayed as raw readings with no pass/fail classification;
-  deliberately deferred per the design notes (not enough baseline
-  history yet to trust specific thresholds).
+  are displayed as raw readings with no pass/fail classification. § 2
+  above now documents which direction is good and, for US AVG, a rough
+  observed trouble point (~50DBMV); what's still deferred is turning
+  that into an actual `resolve_state_word()`-style classification (a
+  color change, a state word, an alert-banner condition) — that needs
+  more baseline history before picking exact cutoffs to hardcode.
 
 ## 4. Conditional / hidden-unless-triggered fields
 
