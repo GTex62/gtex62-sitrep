@@ -23,7 +23,7 @@ layout.frame = {
 -- scale_mode: "auto" computes scale from CONKY_SCREEN_W/H vs frame dimensions.
 -- Frame dimensions are the base (scale=1.0) coordinate space.
 layout.scale_mode = "manual"
-layout.scale = 1.25 -- scale change requires restart
+layout.scale = 1.00 -- scale change requires restart
 
 -- SitRep is single-panel, so there is only one column for now.
 layout.columns = {
