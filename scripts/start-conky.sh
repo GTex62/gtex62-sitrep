@@ -77,7 +77,7 @@ choose_palette() {
   default_palette="$(
     awk -F'"' '/default[[:space:]]*=/{print $2; exit}' "$palette_file"
   )"
-  default_palette="${default_palette:-phosphor}"
+  default_palette="${default_palette:-amber}"
 
   local row=""
   local group=""

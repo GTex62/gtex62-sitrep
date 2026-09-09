@@ -21,7 +21,7 @@ icons_dir = "../gtex62-shared-assets/icons"
 wallpapers_dir = "../gtex62-shared-assets/wallpapers"
 
 [theme]
-default_palette = "phosphor"
+default_palette = "amber"
 palette_catalog = "theme/palettes.lua"
 palette_format = "role3"
 
