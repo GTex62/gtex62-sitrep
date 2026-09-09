@@ -31,7 +31,7 @@ normalized cache SitRep reads from.
 
 SitRep began as a network-status display inside `gtex62-tech-hud`, doing its
 own SSH collection, IP-to-name mapping, and draw-time joins in a single pass.
-This repo is the destination for relocating that functionality onto the
+This repo is the relocation destination for that functionality onto the
 engine model, as a suite in its own right rather than a panel folded into
 OSA:
 
@@ -44,12 +44,13 @@ OSA:
 - `gtex62-sitrep` owns only SitRep-specific layout, drawing, suite view
   models, documentation, and Conky entrypoints.
 
-This repository is currently a structural scaffold: theme, layout, and Conky
-entrypoint files exist and load, but no panel actually displays live
-pfSense/router/pfBlockerNG/Pi-hole/VPN/modem/AP/device data yet. That is
-future work — see [Repository Layout](#repository-layout) and
-[Panel Map](#panel-map) below for what exists today versus what's still to
-come.
+The chassis, header (DOCSIS/PFSENSE status + alert banner), and all six
+panels — PFSENSE, WAN, VPN, PI-HOLE, PFBLOCKERNG, ACCESS POINTS — are wired
+to live engine cache data; this is no longer a structural scaffold. See
+[Panel Map](#panel-map) below for a one-line summary of each, and
+[docs/reading-the-widget.md](docs/reading-the-widget.md) for the full field
+guide — what each number means, where it comes from, and what's still a
+known placeholder or deferred field.
 
 ## Requirements
 
@@ -60,13 +61,16 @@ Base runtime:
 - `lua` or Lua support through Conky
 - `feh` if you want the launcher to apply shared wallpapers
 
-Data sources (once wired up — see [Purpose](#purpose)):
+Data sources, each independently enabled or disabled in
+`~/.config/gtex62-core/core.toml`:
 
-- SSH target for pfSense-backed network data.
-- Pi-hole and pfBlockerNG, if those optional packages are installed.
+- SSH target for pfSense-backed network data (system info, interfaces,
+  gateway meter, pfBlockerNG).
+- Pi-hole and pfBlockerNG, if those optional pfSense packages are installed.
+- SSH target for a Pi5 (or similar), if you want Pi-hole stats and the
+  gateway-outage MTR trace watcher.
 - VPN, cable modem, and access point credentials, per whichever of those
-  device classes you actually own — each is independently enabled or
-  disabled in `~/.config/gtex62-core/core.toml`.
+  device classes you actually own.
 
 Shared repositories expected next to this suite:
 
@@ -193,11 +197,11 @@ See the core README and docs for provider schemas and cache contracts:
 gtex62-sitrep/
 ├── suite.toml      # suite identity, entrypoints, shared asset roots
 ├── README.md
-├── design/         # visual references (gitignored, empty until a previz lands)
+├── design/         # previz images + design notes (gitignored, local only)
 ├── docs/           # SitRep-only implementation notes and references
 ├── lua/
 │   ├── lib/        # thin local compatibility/helper layer
-│   ├── suite/      # SitRep view models over engine cache
+│   ├── suite/      # SitRep view models over engine cache, one file per panel
 │   ├── ui/         # chassis and panel drawing
 │   └── widgets/    # Conky Lua entrypoint
 ├── scripts/        # SitRep launch/wrapper helpers only
@@ -215,25 +219,62 @@ Not present by design:
 Current implementation state:
 
 - `theme/theme.lua`, `theme/layout.lua`, `theme/panels.lua`,
-  `theme/palettes.lua` — load and resolve correctly; palette selection,
-  frame geometry, and FX (shadow/lights) work, but panel box geometry
-  (`theme/panels.lua`'s `boxes` table) is intentionally empty.
-- `lua/suite/runtime.lua` — generic theme/layout/panels loader with
-  mtime-based reload, no SitRep-specific data reads yet.
-- `lua/ui/frame.lua` — draws the chassis (background, panel frame, panel
-  title, frame FX) with no panel content.
-- `lua/widgets/sitrep_main.lua` + `widgets/sitrep-main.conky.conf` — a
-  working Conky entrypoint that renders an empty titled chassis.
-- `lua/lib/` — empty; nothing has needed a compatibility helper yet.
+  `theme/palettes.lua` — fully resolved; palette selection, frame geometry,
+  FX (shadow/lights), and the `boxes` table for all seven panel/header
+  regions are in place.
+- `lua/suite/pf.lua`, `ap.lua`, `vpn.lua`, `pihole.lua`,
+  `pfblockerng.lua` — one view-model module per panel, each reading its own
+  slice of the engine cache and running the shared `resolve_state_word()`
+  precedence chain (see
+  [docs/reading-the-widget.md](docs/reading-the-widget.md)).
+  `lua/suite/runtime.lua` is the generic theme/layout/panels loader with
+  mtime-based reload underneath all of them.
+- `lua/ui/frame.lua` — draws the full chassis and every panel's live
+  content (background, panel frames/titles, FX, and each panel's data
+  layout).
+- `lua/widgets/sitrep_main.lua` + `widgets/sitrep-main.conky.conf` — the
+  Conky entrypoint that renders the live widget end to end.
+- `lua/lib/` — still empty; nothing has needed a compatibility helper yet.
 
 ## Panel Map
 
-`SITREP`
-: The one panel this suite renders. Currently an empty titled frame — no
-  pfSense/router/pfBlockerNG/Pi-hole/VPN/modem/AP/device rows exist yet. What
-  it displays, and how it's subdivided internally, is future panel-design
-  work; see [SitRep Architecture](../gtex62-core/docs/sitrep-architecture.md)
-  for the data model it will eventually present.
+One chassis, one titled frame (`SITREP`), subdivided into a header block and
+six panels. Full field-by-field detail — what each number means, where it
+comes from, and known placeholder/deferred fields — lives in
+[docs/reading-the-widget.md](docs/reading-the-widget.md); this is just the
+map:
+
+`HEADER`
+: Two status lines (DOCSIS modem connectivity, pfSense state) on the left;
+  an alert banner on the right that shows active alert conditions
+  (Comcast outage/degraded, kill-switch blocking, AP offline, MAC/IP
+  mismatch, ...) or `NO ACTIVE ALERTS`, scrolling when more than 3 lines are
+  queued.
+
+`PFSENSE`
+: System info (hardware, version, CPU, BIOS, load) plus a per-interface
+  table (WAN/HOME/IOT/GUEST/INFRA/CAM) and a VPN transfer column — three
+  independent collectors, so one can be stale while the others are fine.
+
+`WAN`
+: A LOSS/AVG gateway-quality meter plus a CM1000 cable-modem detail column
+  (T3 timeout count, downstream SNR pair, upstream power). A live MTR-trace
+  row appears only while a gateway outage has triggered the Pi5 trace
+  watcher.
+
+`VPN`
+: A latency meter plus tunnel status (health, region, protocol, handshake
+  age, kill-switch mode).
+
+`PI-HOLE`
+: System active/inactive + load, plus blocked/domains/total query counts.
+
+`PFBLOCKERNG`
+: IP-block packet count and DNSBL block count/hit-rate/query totals.
+
+`ACCESS POINTS`
+: One repeating block per configured AP (client count, CPU, MAC/IP
+  mismatches, unknown clients, resolved client-name list).
 
 ## Customization
 
@@ -259,23 +300,47 @@ layout.scale      = 1.0        -- active when scale_mode = "manual"
 In `"manual"` mode, `layout.scale` is a fixed multiplier applied to all
 drawing. In `"auto"` mode, the scale is computed from the environment
 variables `CONKY_SCREEN_W` and `CONKY_SCREEN_H` against the base frame
-dimensions (`900 × 1200`). Export both before launching Conky and the suite
-will fit the screen proportionally.
+dimensions (`752 × 960`, `layout.frame` in `theme/layout.lua`). Export both
+before launching Conky and the suite will fit the screen proportionally.
 
 Restart Conky after changing `scale` or `scale_mode`.
 
 ### Palette
 
-SitRep supports a monochrome palette selector through `CONKY_SITREP_PALETTE`,
+SitRep supports a palette selector through `CONKY_SITREP_PALETTE`,
 independent of OSA's `CONKY_OSA_PALETTE` — the two suites never share a
 palette catalog or runtime selection, even though the catalog shapes match.
-Available palettes are defined in
-[theme/palettes.lua](theme/palettes.lua); the default is `phosphor`.
+Available palettes are defined, grouped by theme (core, signal/phosphor,
+material, cartographic, dusk, LCD, and others), in
+[theme/palettes.lua](theme/palettes.lua); the default is that file's own
+top-level `default` field, which `scripts/start-conky.sh` reads directly to
+pre-select the launcher's palette prompt.
 
 Data customization belongs in `~/.config/gtex62-core/site.toml` unless the
 change is truly suite-specific.
 
 ## Troubleshooting
+
+### Provider flags for your setup
+
+Every data source is gated behind its own flag in
+`~/.config/gtex62-core/core.toml`, and **all of them default to false** —
+this suite doesn't assume you own a Pi-hole, a VPN subscription, an AP
+fleet, or a specific modem model. Enable only what matches your own
+network; leaving the rest off renders that panel `DISABLED` (see
+[docs/reading-the-widget.md § State-word legend](docs/reading-the-widget.md#1-state-word-legend))
+instead of trying to reach a host you don't have and tripping its SSH gate:
+
+| Flag | Panel(s) it feeds |
+| --- | --- |
+| `providers.pfsense.status` | PFSENSE interface table + WAN gateway meter |
+| `providers.pfsense.router` | PFSENSE VERSION/CPU/BIOS/LOAD row |
+| `providers.pfsense.pihole` | PI-HOLE panel |
+| `providers.pfsense.pfblockerng` | PFBLOCKERNG panel |
+| `providers.vpn` | VPN panel |
+| `providers.ap` | ACCESS POINTS panel |
+| `providers.modem` | WAN panel's CM1000 detail column |
+| `providers.alerts` | header alert banner |
 
 Refresh the runtime examples from core:
 
@@ -290,11 +355,15 @@ populated:
 find ~/.cache/gtex62-core/shared -maxdepth 3 -type f | sort
 ```
 
-If the chassis renders but stays empty, that's expected at this stage — no
-panel reads cache data yet. If the chassis fails to render at all, check that
-`gtex62-core/lua/runtime/window.lua` is reachable from `GTEX62_CORE_DIR` and
-that `theme/palettes.lua` still has a `default` entry matching an existing
-palette key.
+If a panel or field shows a state word (`DISABLED`, `UNCONFIGURED`,
+`SSH DOWN`, `STALE - <N>M AGO`, `NO DATA`) instead of real data, that's the
+shared `resolve_state_word()` chain reporting a real condition, not a
+rendering bug — see
+[docs/reading-the-widget.md § State-word legend](docs/reading-the-widget.md#1-state-word-legend)
+to work out which one and why. If the chassis fails to render at all, check
+that `gtex62-core/lua/runtime/window.lua` is reachable from
+`GTEX62_CORE_DIR` and that `theme/palettes.lua` still has a `default` entry
+matching an existing palette key.
 
 ## Relationship to gtex62-tech-hud
 
@@ -305,13 +374,13 @@ its SitRep is read-only reference material for what the eventual panel needs
 to display, not a source to port from wholesale.
 
 Note this repo takes a different architectural path than
-[gtex62-core/docs/sitrep-relocation-plan.md](../gtex62-core/docs/sitrep-relocation-plan.md)
+[gtex62-core/docs/archive/sitrep-relocation-plan.md](../gtex62-core/docs/archive/sitrep-relocation-plan.md)
 originally sketched: that document plans SitRep as an engine-resident,
 suite-independent widget under `gtex62-core/widgets/sitrep/` (command
 `sitrep-e`, no `suite.toml`, works with `CONKY_SUITE_DIR` unset). This repo
 instead gives SitRep its own suite identity, matching OSA's model. The data
-layer this suite will consume — provider cache schemas, enable/disable
-flags, staleness handling — is unaffected by that choice and is documented in
+layer this suite consumes — provider cache schemas, enable/disable flags,
+staleness handling — is unaffected by that choice and is documented in
 `gtex62-core/docs/`.
 
 ## License
