@@ -133,21 +133,27 @@ and the CM1000 detail column.
   `AVG XXX` with both bars at zero height — an obviously-fake
   placeholder rather than a plausible-looking number.
 - **CM1000 column** — from `modem/<profile>/status.json`:
-  - `T3 X N TOTAL` (changed 2026-09-08, was `T3 X N (HH)`) —
-    `recent_t3_timeouts`. **Normal**: 0. **Read this as a lifetime
-    count of a currently-active condition, not "N timeouts in the last
-    hour":** the CM1000 collapses a repeating identical T3 event into
-    one log row and only updates that row's `LastTime`/repeat counter,
-    so `N` is that row's *entire* history, riding along whenever its
-    `LastTime` lands inside the collector's trailing window
-    (`event_log_window_minutes`) — a count going 90 -> 91 means one
-    fresh occurrence on an old condition, not 91 new ones. Confirmed
-    live 2026-09-08 that the CM1000's own admin GUI can't even show
-    this distinction (see
+  - `T3 X N TOTAL` when `N > 0`, `T3 X 0 (HH)` when `N == 0` — not one
+    unconditional format (changed 2026-09-08, revised 2026-09-10, was
+    originally `T3 X N (HH)` always) — `recent_t3_timeouts`. **Normal**:
+    `T3 X 0 (1H)`. **Read a nonzero `N` as a lifetime count of a
+    currently-active condition, not "N timeouts in the last hour":** the
+    CM1000 collapses a repeating identical T3 event into one log row and
+    only updates that row's `LastTime`/repeat counter, so `N` is that
+    row's *entire* history, riding along whenever its `LastTime` lands
+    inside the collector's trailing window (`event_log_window_minutes`)
+    — a count going 90 -> 91 means one fresh occurrence on an old
+    condition, not 91 new ones. Confirmed live 2026-09-08 that the
+    CM1000's own admin GUI can't even show this distinction (see
     [Network Providers Roadmap's Sept 8
     session log](../../gtex62-core/docs/network-providers-roadmap.md)) —
-    this field is the more trustworthy read. No timestamp is shown in
-    this column (no room for it); the matching `FOR H:MM` elapsed-time
+    this field is the more trustworthy read. `(HH)` comes back
+    specifically for the `N == 0` case (2026-09-10): "0 TOTAL" was its
+    own mislabeling — it reads as "there have never been any T3s" when
+    it actually means "nothing landed in the trailing window," a
+    windowed claim that needs the window stated to be honest, unlike a
+    nonzero `TOTAL` which is genuinely unbounded. No timestamp is shown
+    in this column (no room for it); the matching `FOR H:MM` elapsed-time
     anchor is in the header alert banner's `comcast-degraded-t3` child
     instead, when that alert is active — see below. Elapsed rather than
     a wall-clock anchor (changed 2026-09-09) so it stays meaningful past
