@@ -113,6 +113,19 @@ for the full schema), gated on `providers.alerts` + its own profile TTL, same
   [gtex62-sitrep/design/sitrep-design-notes.md § Alert banner / outage
   detection](../design/sitrep-design-notes.md) for the full condition
   table.
+- `MAC/IP MISMATCH (<N>)` gives **two** children per mismatch (changed
+  2026-09-10, was one line combining both) — `{NAME} AT {LABEL}` (e.g.
+  `TAURUS AT GREAT ROOM`) then `{IP} <- {DOCUMENTED IP}` (e.g.
+  `192.168.40.100 <- 192.168.10.4`), same split rationale as the T3
+  burst/total pair above: the single-line version (name + label + both
+  IPs) ran past 60 characters, well over the 339px column's ~32-34
+  character budget, and overflowed past the banner's right edge.
+  `{NAME}`/`{LABEL}` are `.upper()`'d server-side before being written
+  to `banner.json` (device display names and AP labels aren't
+  guaranteed pre-uppercased the way every other message in this file
+  is hardcoded) — the render font (`GTex62 OSA`) has no lowercase
+  glyphs, so an un-uppercased name rendered as its first letter
+  followed by a blank gap where the rest of the word should be.
 - Up to 3 flattened lines are shown at once. More than 3: the whole banner
   scrolls upward one line at a time, wrapping circularly (marquee-style),
   at `theme.alert_banner.scroll_interval_sec` (default 3s) — a pure
