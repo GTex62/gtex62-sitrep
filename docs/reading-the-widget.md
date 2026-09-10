@@ -82,14 +82,26 @@ for the full schema), gated on `providers.alerts` + its own profile TTL, same
   children, even across the severity sort. Message text is pre-built
   server-side (e.g. `COMCAST OUTAGE DETECTED`, `KS BLOCKING TRAFFIC`,
   `AP OFFLINE: <label>`, `MAC/IP MISMATCH (<N>)`) and displayed
-  verbatim. `COMCAST DEGRADED`'s `comcast-degraded-t3` child reads
-  `T3: <n> TOTAL FOR <H:MM>` (elapsed hours:minutes, uncapped past 24 —
-  changed 2026-09-09 from a wall-clock `SINCE <HH:MM>`, itself changed
-  2026-09-08 from `T3: <n> IN <window>M`) — the `FOR <H:MM>` anchor is
-  the WAN panel's `T3 X N TOTAL` line's missing duration; it lives here
-  instead because this line has room for both the total and the anchor
-  together, the WAN panel's CM1000 column doesn't (see § WAN panel
-  above).
+  verbatim. `COMCAST DEGRADED`'s T3 side gives **two** children now
+  (changed 2026-09-10, was one — see [Network Providers Roadmap's Sept
+  8-10 session logs](../../gtex62-core/docs/network-providers-roadmap.md)
+  for the full investigation), and only appears at all while a genuine
+  burst is active:
+  - `comcast-degraded-t3-burst`: `T3: +<n> IN <M>MIN` — a genuine recent
+    delta (how many NEW T3s landed since the last poll, roughly), not
+    the lifetime total. This is what actually triggers the alert now —
+    `recent_t3_timeouts` crossing a flat count used to trigger it, but
+    that field is a whole collapsed row's lifetime count and stayed
+    elevated for as long as the same condition recurred at all, however
+    mildly, making a real burst and a long mild trickle look identical.
+  - `comcast-degraded-t3-total`: `T3: <n> TOTAL FOR <H:MM>` (elapsed
+    hours:minutes, uncapped past 24) — the same running-total context as
+    before, still shown alongside the burst line for the full picture.
+    A pure trickle (nonzero total, not currently bursting) no longer
+    raises this alert at all — that context lives solely on the WAN
+    panel's always-visible `T3 X N TOTAL` line instead (see § WAN panel
+    above), which has room for the total but not for both children
+    together the way this banner line does.
 
   `KS BLOCKING TRAFFIC` is a deliberately distinct SEVERE
   condition from `COMCAST OUTAGE DETECTED` — same "nothing works"
@@ -154,11 +166,15 @@ and the CM1000 detail column.
     windowed claim that needs the window stated to be honest, unlike a
     nonzero `TOTAL` which is genuinely unbounded. No timestamp is shown
     in this column (no room for it); the matching `FOR H:MM` elapsed-time
-    anchor is in the header alert banner's `comcast-degraded-t3` child
-    instead, when that alert is active — see below. Elapsed rather than
-    a wall-clock anchor (changed 2026-09-09) so it stays meaningful past
-    24h without also needing a date printed — hours just keep counting
-    up (e.g. `36:12` for a day and a half).
+    anchor is in the header alert banner's `comcast-degraded-t3-total`
+    child instead — but only while a genuine burst is also active (see
+    below and § Header — alert banner above); a pure trickle (this
+    column showing a nonzero `TOTAL` with nothing in the banner) is
+    normal and doesn't mean the anchor is missing, just that nothing's
+    currently urgent enough to show it. Elapsed rather than a wall-clock
+    anchor (changed 2026-09-09) so it stays meaningful past 24h without
+    also needing a date printed — hours just keep counting up (e.g.
+    `36:12` for a day and a half).
   - `DS1 SNR xx.xDB` / `DS2 SNR xx.xDB` — signal-to-noise ratio of
     the *first* and *second* downstream OFDM channels
     (`downstream_ofdm_channels[0]` / `[1]`, 0-based index — by array
