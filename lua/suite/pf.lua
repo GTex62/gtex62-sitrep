@@ -749,25 +749,34 @@ end
 -- upstream_channels with locked == true (unlocked slots carry 0.0 and
 -- must not drag the average down). T3 count is recent_t3_timeouts.
 --
--- "T3 X N TOTAL", not "T3 X N (1H)" (changed 2026-09-08, see roadmap's
--- Sept 8 session log): recent_t3_timeouts is a whole collapsed row's
--- docsDevEvCounts, not "how many happened in the last hour" — the CM1000
--- collapses a repeating identical event into one row and only ever
--- updates that row's LastTime/Counts, so once the row's LastTime lands
--- inside the trailing window, its *entire* history rides along with it.
--- The old "(1H)" suffix implied a fresh-this-hour count and a user was
--- misreading a count going 90 -> 91 as "91 fresh timeouts this hour"
--- when it was really "one more on a condition recurring since early
--- that morning" — confirmed live that the CM1000's own GUI can't even
--- show the difference (it renders a collapsed row's FirstTime as "Time"
--- and never surfaces LastTime/Counts at all, so the row looked
--- frozen/quiet all day while it was actually still active). "TOTAL" is
--- the honest word for what this number actually is. The matching
--- "SINCE HH:MM" anchor (recent_t3_since, from fetch_modem.py's
--- compute_recent_t3()) lives in the Alert Banner's comcast-degraded-t3
--- child instead of here — see fetch_alerts.sh — where a single line has
--- room for both the total and the anchor together; this column only has
--- room for the total.
+-- "T3 X N TOTAL" when N > 0, "T3 X 0 (1H)" when N == 0 — not one
+-- unconditional format (changed 2026-09-08, revised 2026-09-10, see
+-- roadmap's Sept 8/9/10 session logs): recent_t3_timeouts is a whole
+-- collapsed row's docsDevEvCounts, not "how many happened in the last
+-- hour" — the CM1000 collapses a repeating identical event into one row
+-- and only ever updates that row's LastTime/Counts, so once the row's
+-- LastTime lands inside the trailing window, its *entire* history rides
+-- along with it. The old-old "(1H)" suffix on a nonzero count implied a
+-- fresh-this-hour tally and a user was misreading a count going 90 -> 91
+-- as "91 fresh timeouts this hour" when it was really "one more on a
+-- condition recurring since early that morning" — confirmed live that
+-- the CM1000's own GUI can't even show the difference. "TOTAL" is the
+-- honest word for a nonzero count: it's a real, unbounded cumulative
+-- total, not scoped to any window — the matching elapsed-time anchor
+-- (recent_t3_elapsed, from fetch_modem.py's compute_recent_t3()) lives
+-- in the Alert Banner's comcast-degraded-t3 child instead of here (see
+-- fetch_alerts.sh) — that line has room for both the total and the
+-- anchor together, this column only has room for the total.
+--
+-- But "TOTAL" on a *zero* count is its own, different mislabeling (the
+-- 2026-09-08 change introduced this one, caught 2026-09-10): "T3 X 0
+-- TOTAL" reads as "there have never been any T3s," when it actually
+-- means "nothing landed in the trailing window" — there can be (usually
+-- is, per the sessions above) a long history of prior episodes that
+-- just aren't inside the last event_log_window_minutes right now. That's
+-- a genuinely windowed claim, not an unbounded one, so it needs the
+-- window stated to be honest, same as before 2026-09-08 — hence "(1H)"
+-- coming back specifically for N == 0, while N > 0 keeps "TOTAL".
 --
 -- This is unrelated to mtr_line() above, which M.wan_panel_data() below
 -- appends to this column's line list as its final entry, rather than
@@ -779,14 +788,14 @@ local function cm1000_fields()
   local profile = suite_profile("modem", "local")
   local path = string.format("%s/shared/modem/%s/status.json", CACHE_ROOT, profile)
   local row = json_row(path,
-    '[.state, (.note // ""), (.recent_t3_timeouts // 0), '
+    '[.state, (.note // ""), (.recent_t3_timeouts // 0), (.event_log_window_minutes // 60), '
     .. '(.downstream_ofdm_channels[0].snr_db // 0), (.downstream_ofdm_channels[1].snr_db // 0), '
     .. '([.upstream_channels[]? | select(.locked) | .power_dbmv] | if length > 0 then (add / length) else 0 end)'
     .. '] | @tsv'
   )
-  local fields = split_tsv(row, 6)
+  local fields = split_tsv(row, 7)
   local state, note = fields[1], fields[2]
-  local t3_count, ds1_snr, ds2_snr, us_avg = fields[3], fields[4], fields[5], fields[6]
+  local t3_count, window_min, ds1_snr, ds2_snr, us_avg = fields[3], fields[4], fields[5], fields[6], fields[7]
 
   local profile_toml = parse_simple_toml(RUNTIME_ROOT .. "/profiles/modem/" .. profile .. ".toml")
   local cache_ttl_sec = toml_number(profile_toml, "", "cache_ttl_sec", 300)
@@ -805,8 +814,17 @@ local function cm1000_fields()
     return { word }
   end
 
+  local t3_num = tonumber(t3_count) or 0
+  local t3_line
+  if t3_num > 0 then
+    t3_line = string.format("T3 X %d TOTAL", t3_num)
+  else
+    local hours = math.max(1, math.floor(((tonumber(window_min) or 60) / 60) + 0.5))
+    t3_line = string.format("T3 X 0 (%dH)", hours)
+  end
+
   return {
-    string.format("T3 X %d TOTAL", tonumber(t3_count) or 0),
+    t3_line,
     string.format("DS1 SNR %.1fDB", tonumber(ds1_snr) or 0),
     string.format("DS2 SNR %.1fDB", tonumber(ds2_snr) or 0),
     string.format("US AVG %.1fDBMV", tonumber(us_avg) or 0),
