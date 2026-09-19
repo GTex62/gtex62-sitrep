@@ -5,14 +5,14 @@
 -- Wired to fetch_pihole.sh's shared/pfsense/{profile}/pihole.json
 -- (gtex62-core/providers/pfsense/fetch_pihole.sh) — despite the "pihole"
 -- name this lives under the pfsense domain, not a separate pihole
--- profile: the script's own comment says it's "nested here to match
--- fetch_pfsense.sh's existing four-output structure" since Pi-hole runs
--- on Pi5, reached over its own SSH target/gate, not pfSense itself. So
--- this reuses suite_profile("pfsense", "main_router") — same profile pf.lua
--- reads status.json/router.json from — just a different filename; no
--- overlap with what pf.lua itself reads. Gate flag is
--- providers.pfsense.pihole in core.toml (not a top-level providers.pihole),
--- confirmed against core.toml's [providers.pfsense] section.
+-- profile: Pi-hole runs on Pi5, reached over its own SSH target/gate, not
+-- pfSense itself, but shares the pfsense profile TOML's [pihole] section
+-- and cache directory. So this reuses suite_profile("pfsense",
+-- "main_router") — same profile pf.lua reads status.json/router.json from
+-- — just a different filename; no overlap with what pf.lua itself reads.
+-- Gate flag is providers.pihole in core.toml (top-level [providers], moved
+-- out of [providers.pfsense] — the launcher additionally requires "pihole"
+-- in the suite's [domains] list; see gtex62-core README § Provider Toggles).
 --
 -- Independent Disabled/Unconfigured/SSH-Down/Stale precedence chain
 -- (resolve_state_word(), same shape as pf.lua/vpn.lua's copies), keyed to
@@ -192,7 +192,7 @@ end
 -- pfSense's router.json.
 local function pihole_fields()
   local core_cfg = parse_simple_toml(RUNTIME_ROOT .. "/core.toml")
-  local enabled = toml_bool(core_cfg, "providers.pfsense", "pihole", false)
+  local enabled = toml_bool(core_cfg, "providers", "pihole", false)
 
   local profile = suite_profile("pfsense", "main_router")
   local path = string.format("%s/shared/pfsense/%s/pihole.json", CACHE_ROOT, profile)

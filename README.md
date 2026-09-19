@@ -344,7 +344,7 @@ instead of trying to reach a host you don't have and tripping its SSH gate:
 | --- | --- |
 | `providers.pfsense.status` | PFSENSE interface table + WAN gateway meter |
 | `providers.pfsense.router` | PFSENSE VERSION/CPU/BIOS/LOAD row |
-| `providers.pfsense.pihole` | PI-HOLE panel |
+| `providers.pihole` | PI-HOLE panel |
 | `providers.pfsense.pfblockerng` | PFBLOCKERNG panel |
 | `providers.vpn` | VPN panel |
 | `providers.ap` | ACCESS POINTS panel |

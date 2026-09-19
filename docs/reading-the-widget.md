@@ -305,7 +305,7 @@ cache file and TTL.
 `pfsense/<profile>/pihole.json` (`fetch_pihole.sh` — lives under the
 pfSense cache namespace/profile because Pi-hole runs on Pi5, reached
 over its own SSH target, not on pfSense itself; gate flag is
-`providers.pfsense.pihole`).
+`providers.pihole`).
 
 - **SYSTEM** — `ACTIVE`/`INACTIVE` (instantaneous `systemctl is-active`
   read — **not** the same thing as the duration-gated PI-HOLE INACTIVE

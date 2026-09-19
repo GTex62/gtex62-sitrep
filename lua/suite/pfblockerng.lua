@@ -6,8 +6,8 @@
 -- this lives under the pfsense domain, same as pihole.json, not a separate
 -- pfblockerng profile. Same profile resolution as pihole.lua/pf.lua
 -- (suite_profile("pfsense", "main_router")). Gate flag is
--- providers.pfsense.pfblockerng in core.toml (confirmed alongside .pihole
--- in the same [providers.pfsense] section).
+-- providers.pfsense.pfblockerng in core.toml ([providers.pfsense] section;
+-- pihole moved out to top-level [providers] — see pihole.lua).
 --
 -- IP BLOCK only gets one real row: the bare pfb_ip_total count, no inline
 -- label (the "IP BLOCK" column header already identifies it, and it's
