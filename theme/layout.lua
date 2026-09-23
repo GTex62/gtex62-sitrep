@@ -27,7 +27,7 @@ layout.scale = 1.00 -- scale change requires restart
 
 -- SitRep is single-panel, so there is only one column for now.
 layout.columns = {
-  main = { x = 24, width = 696 },
+  main = { x = 28, width = 696 },
 }
 
 layout.rows = {

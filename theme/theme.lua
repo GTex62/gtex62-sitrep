@@ -23,7 +23,7 @@ local engine_runtime = load_engine_runtime()
 
 -- Monitor selection (0 = primary, 1 = secondary). Provisional — pending final
 -- size/placement confirmation once SitRep is actually laid out on-screen.
-theme.monitor_head = 0
+theme.monitor_head = 1
 
 -- Palette (own catalog — env override mirrors OSA's CONKY_OSA_PALETTE pattern)
 theme.default_palette = palette_catalog.default or "amber"
