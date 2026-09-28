@@ -25,6 +25,9 @@ default_palette = "amber"
 palette_catalog = "theme/palettes.lua"
 palette_format = "role3"
 
+[launch]
+companion = true
+
 [[instances.chassis]]
 id          = "main"
 conf        = "widgets/sitrep-main.conky.conf"
