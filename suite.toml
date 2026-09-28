@@ -24,6 +24,7 @@ wallpapers_dir = "../gtex62-shared-assets/wallpapers"
 default_palette = "amber"
 palette_catalog = "theme/palettes.lua"
 palette_format = "role3"
+palette_catalog_syntax = "nested-table"
 
 [launch]
 companion = true
