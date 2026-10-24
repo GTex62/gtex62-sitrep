@@ -113,6 +113,17 @@ for the full schema), gated on `providers.alerts` + its own profile TTL, same
   [gtex62-sitrep/design/sitrep-design-notes.md § Alert banner / outage
   detection](../design/sitrep-design-notes.md) for the full condition
   table.
+
+  `T2/T4/SYNC EVENT DETECTED` (CAUTION, added 2026-10-24 in core v0.15.0)
+  means the modem's own event log shows a re-registration-class DOCSIS
+  failure inside the last hour: it lost sync with the CMTS. It usually
+  arrives alongside `KS BLOCKING TRAFFIC` (the kill switch trips while the
+  modem re-syncs); this one names the cause. Two children:
+  `SEEN: T4+SYNC` (which of T2/T4/SYNC fired) and `LAST EVENT <n>MIN AGO`.
+  It clears on its own once the log has been quiet for the window (60
+  minutes by default), so it can stay up well after the connection is
+  back. See [Modem Provider Status](../../gtex62-core/docs/modem-provider-status.md)
+  for the `recent_resync_*` fields behind it.
 - `MAC/IP MISMATCH (<N>)` gives **two** children per mismatch (changed
   2026-09-10, was one line combining both) — `{NAME} AT {LABEL}` (e.g.
   `TAURUS AT GREAT ROOM`) then `{IP} <- {DOCUMENTED IP}` (e.g.
